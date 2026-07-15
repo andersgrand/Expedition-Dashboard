@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>70°N to 55°S — Expedition Mission Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root{
+    --bg:#0A0E12;
+    --panel:#121820;
+    --panel-2:#171F29;
+    --line:#26313D;
+    --ice:#8FE3E8;
+    --signal:#FF6B35;
+    --text:#E7ECEF;
+    --text-dim:#8A97A3;
+    --paper:#EFEAE0;
+
+    --font-display:'Oswald',sans-serif;
+    --font-body:'Inter',sans-serif;
+    --font-mono:'IBM Plex Mono',monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{background:var(--bg); color:var(--text); font-family:var(--font-body); scroll-behavior:smooth;}
+  body{-webkit-font-smoothing:antialiased;}
+
+  ::selection{background:var(--signal); color:#0A0E12;}
+
+  a{color:var(--ice); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+
+  .eyebrow{
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+  }
+
+  h1,h2,h3{font-family:var(--font-display); text-transform:uppercase; letter-spacing:.01em; font-weight:600;}
+
+  /* ---------- layout shell ---------- */
+  .shell{
+    display:grid;
+    grid-template-columns:64px 1fr;
+    min-height:100vh;
+  }
+  @media (max-width:820px){
+    .shell{grid-template-columns:1fr;}
+  }
+
+  /* ---------- latitude ruler (signature element) ---------- */
+  .ruler{
+    position:sticky; top:0;
+    height:100vh;
+    background:var(--panel);
+    border-right:1px solid var(--line);
+    display:flex; flex-direction:column; align-items:center;
+    padding:20px 0;
+  }
+  @media (max-width:820px){
+    .ruler{
+      position:relative; height:auto; width:100%;
+      flex-direction:row; padding:12px 16px;
+      border-right:none; border-bottom:1px solid var(--line);
+      overflow-x:auto;
+    }
+  }
+  .ruler-label-top,.ruler-label-bottom{
+    font-family:var(--font-mono); font-size:10px; color:var(--text-dim); letter-spacing:.08em;
+  }
+  .ruler-track{
+    position:relative;
+    flex:1; width:2px; background:var(--line);
+    margin:14px 0;
+  }
+  @media (max-width:820px){
+    .ruler-track{flex:1; height:2px; width:auto; margin:0 14px; min-width:220px;}
+  }
+  .tick{
+    position:absolute; left:50%; transform:translateX(-50%);
+    width:10px; height:1px; background:var(--text-dim);
+  }
+  .tick.major{width:16px; background:var(--ice); opacity:.5;}
+  .tick-label{
+    position:absolute; left:14px; transform:translateY(-50%);
+    font-family:var(--font-mono); font-size:9px; color:var(--text-dim);
+    white-space:nowrap;
+  }
+  @media (max-width:820px){
+    .tick{left:auto; top:50%; transform:translateY(-50%) rotate(90deg); }
+    .tick-label{left:auto; top:16px; transform:none;}
+  }
+  .waypoint{
+    position:absolute; left:50%; transform:translateX(-50%);
+    width:8px; height:8px; border-radius:50%;
+    background:var(--paper); border:2px solid var(--bg);
+  }
+  .you-are-here{
+    position:absolute; left:50%; transform:translate(-50%,-50%);
+    width:14px; height:14px; border-radius:50%;
+    background:var(--signal);
+    box-shadow:0 0 0 0 rgba(255,107,53,.6);
+    animation:pulse 2.2s infinite;
+  }
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(255,107,53,.55);}
+    70%{box-shadow:0 0 0 14px rgba(255,107,53,0);}
+    100%{box-shadow:0 0 0 0 rgba(255,107,53,0);}
+  }
+
+  /* ---------- main column ---------- */
+  main{width:100%; max-width:1180px; margin:0 auto; padding:0 24px 80px;}
+  @media (max-width:600px){ main{padding:0 16px 60px;} }
+
+  /* hero */
+  .hero{padding:56px 0 40px; border-bottom:1px solid var(--line);}
+  .status-badge{
+    display:inline-flex; align-items:center; gap:8px;
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.06em;
+    color:var(--signal); border:1px solid rgba(255,107,53,.35);
+    background:rgba(255,107,53,.08);
+    padding:6px 12px; border-radius:999px; margin-bottom:20px;
+  }
+  .status-dot{width:7px; height:7px; border-radius:50%; background:var(--signal); animation:pulse 2.2s infinite;}
+  .hero h1{font-size:clamp(32px,6vw,64px); line-height:1.02; max-width:880px;}
+  .hero h1 span{color:var(--ice);}
+  .hero p.sub{color:var(--text-dim); font-size:16px; margin-top:16px; max-width:560px;}
+
+  .stat-row{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
+    background:var(--line); margin-top:36px; border:1px solid var(--line);
+  }
+  @media (max-width:700px){ .stat-row{grid-template-columns:repeat(2,1fr);} }
+  .stat{background:var(--panel); padding:20px 18px;}
+  .stat .eyebrow{margin-bottom:8px;}
+  .stat .val{font-family:var(--font-mono); font-size:26px; color:var(--paper);}
+  .stat .val small{font-size:13px; color:var(--text-dim); font-family:var(--font-body);}
+
+  /* section shell */
+  section.panel{padding:48px 0; border-bottom:1px solid var(--line);}
+  section.panel:last-of-type{border-bottom:none;}
+  .panel-head{display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom:24px; flex-wrap:wrap;}
+  .panel-head h2{font-size:22px; color:var(--paper);}
+
+  /* map */
+  .map-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:6px;
+    padding:20px; position:relative; overflow:hidden;
+  }
+  .map-card svg{width:100%; height:auto; display:block;}
+  .route-line{fill:none; stroke:var(--ice); stroke-width:1.6; stroke-dasharray:4 3; opacity:.7;}
+  .route-covered{fill:none; stroke:var(--signal); stroke-width:2.4;}
+  .map-marker{fill:var(--signal);}
+  .map-node{fill:var(--paper); opacity:.85;}
+  .map-label{font-family:var(--font-mono); font-size:9px; fill:var(--text-dim);}
+
+  /* metrics grid */
+  .metrics-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:16px;}
+  @media (max-width:700px){ .metrics-grid{grid-template-columns:1fr;} }
+  .metric-card{background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:18px;}
+  .metric-card .metric-head{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px;}
+  .metric-card h3{font-size:13px; font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); font-weight:500;}
+  .metric-card .now{font-family:var(--font-mono); color:var(--paper); font-size:20px;}
+  .metric-card canvas{max-height:140px;}
+
+  /* weather */
+  .weather-card{
+    display:flex; gap:32px; flex-wrap:wrap; align-items:center;
+    background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:24px;
+  }
+  .weather-now .temp{font-family:var(--font-display); font-size:56px; color:var(--paper); line-height:1;}
+  .weather-now .cond{color:var(--text-dim); margin-top:4px;}
+  .weather-detail-grid{display:grid; grid-template-columns:repeat(3,auto); gap:24px; flex:1;}
+  .weather-detail .eyebrow{margin-bottom:4px;}
+  .weather-detail .val{font-family:var(--font-mono); color:var(--paper); font-size:16px;}
+
+  /* fundraising */
+  .fund-card{background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:26px;}
+  .fund-top{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:14px; flex-wrap:wrap; gap:8px;}
+  .fund-top .amt{font-family:var(--font-mono); font-size:24px; color:var(--paper);}
+  .fund-top .goal{color:var(--text-dim); font-family:var(--font-mono); font-size:14px;}
+  .bar-track{height:10px; background:var(--panel-2); border-radius:999px; overflow:hidden; border:1px solid var(--line);}
+  .bar-fill{height:100%; background:linear-gradient(90deg,var(--signal),#ffb08a); border-radius:999px; width:0%; transition:width 1.4s ease;}
+  .fund-foot{display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:12px;}
+  .fund-note{color:var(--text-dim); font-size:14px; max-width:460px;}
+  .btn{
+    display:inline-block; font-family:var(--font-mono); font-size:13px; letter-spacing:.04em;
+    background:var(--signal); color:#0A0E12; padding:10px 18px; border-radius:4px; font-weight:600;
+    text-decoration:none;
+  }
+  .btn:hover{background:#ff8256; text-decoration:none;}
+
+  /* links row */
+  .links-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:16px;}
+  @media (max-width:700px){ .links-grid{grid-template-columns:1fr;} }
+  .link-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:20px;
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .link-card .eyebrow{color:var(--ice);}
+  .link-card h3{font-size:16px; font-family:var(--font-body); text-transform:none; font-weight:600; color:var(--paper);}
+  .link-card p{color:var(--text-dim); font-size:13px;}
+  .link-card .go{margin-top:8px; font-family:var(--font-mono); font-size:12px;}
+
+  /* activity feed */
+  .activity-feed{display:flex; flex-direction:column;}
+  .activity-row{
+    display:grid; grid-template-columns:1fr auto; gap:8px 16px;
+    padding:16px 0; border-top:1px solid var(--line); align-items:baseline;
+  }
+  .activity-row:first-child{border-top:none;}
+  .activity-row .a-name{font-family:var(--font-body); font-weight:600; color:var(--paper); font-size:15px;}
+  .activity-row .a-date{font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-top:2px;}
+  .activity-row .a-stats{
+    display:flex; gap:18px; font-family:var(--font-mono); font-size:13px; color:var(--ice);
+    justify-content:flex-end; flex-wrap:wrap; text-align:right;
+  }
+  .activity-row .a-stats span small{color:var(--text-dim); font-family:var(--font-body); margin-left:3px;}
+  @media (max-width:600px){
+    .activity-row{grid-template-columns:1fr;}
+    .activity-row .a-stats{justify-content:flex-start; text-align:left;}
+  }
+
+  /* log */
+  .log-entry{
+    display:grid; grid-template-columns:110px 1fr; gap:16px;
+    padding:16px 0; border-top:1px solid var(--line);
+  }
+  .log-entry:first-child{border-top:none;}
+  .log-entry .day{font-family:var(--font-mono); color:var(--text-dim); font-size:13px;}
+  .log-entry .body p{font-size:14px; color:var(--text); line-height:1.5;}
+  .log-entry .body .loc{font-family:var(--font-mono); font-size:11px; color:var(--ice); margin-bottom:4px; display:block;}
+
+  footer{padding:32px 0; text-align:center; color:var(--text-dim); font-size:12px; font-family:var(--font-mono);}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- signature: latitude ruler, real coordinates of the route -->
+  <div class="ruler" id="ruler">
+    <div class="ruler-label-top">70°N</div>
+    <div class="ruler-track" id="rulerTrack"></div>
+    <div class="ruler-label-bottom">55°S</div>
+  </div>
+
+  <main>
+    <!-- HERO -->
+    <header class="hero">
+      <div class="status-badge"><span class="status-dot"></span> LOCATION DELAYED 6HR FOR SAFETY</div>
+      <h1>PRUDHOE BAY <span>→</span> USHUAIA<br>ON BIKE &amp; BY KAYAK</h1>
+      <p class="sub">One continuous human-powered line from the Arctic Ocean to the Beagle Channel — cycling the Americas end to end, paddling the Darién Gap where the road runs out.</p>
+
+      <div class="stat-row">
+        <div class="stat">
+          <div class="eyebrow">Current position</div>
+          <div class="val" id="statLat">7.9°N</div>
+        </div>
+        <div class="stat">
+          <div class="eyebrow">Day of expedition</div>
+          <div class="val">142 <small>/ ~365 est.</small></div>
+        </div>
+        <div class="stat">
+          <div class="eyebrow">Distance covered</div>
+          <div class="val">6,840 <small>km</small></div>
+        </div>
+        <div class="stat">
+          <div class="eyebrow">Remaining</div>
+          <div class="val">~10,400 <small>km</small></div>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAP -->
+    <section class="panel" id="map">
+      <div class="panel-head">
+        <h2>Route &amp; position</h2>
+        <span class="eyebrow">Live from Strava — shows your most recent tracked activity</span>
+      </div>
+      <div class="map-card" style="padding:0; overflow:hidden;">
+        <div id="leafletMap" style="width:100%; height:480px; background:#171F29;"></div>
+      </div>
+    </section>
+
+    <!-- LIVE LOCATION (POLARSTEPS EMBED) -->
+    <section class="panel" id="live-location">
+      <div class="panel-head">
+        <h2>Live location</h2>
+        <span class="eyebrow">Powered by Polarsteps — test trip embedded for now, swap in the real one later</span>
+      </div>
+      <div class="map-card" style="padding:0; overflow:hidden;">
+        <!--
+          REPLACE THE src BELOW with your own public Polarsteps trip URL.
+          Find it by opening your trip on polarsteps.com and copying the address bar link,
+          e.g. https://www.polarsteps.com/YourUsername/12345-alaska-to-argentina
+          Your trip must be set to "Public" in Polarsteps' privacy settings for this to work.
+        -->
+        <iframe
+          src="https://www.polarsteps.com/AndersGrand/24481593-afrika/embed"
+          title="Live Polarsteps trip map"
+          width="640"
+          height="480"
+          style="width:100%; height:560px; border:0; display:block;"
+          loading="lazy"
+          allow="geolocation"
+        ></iframe>
+      </div>
+      <p style="margin-top:12px; color:var(--text-dim); font-size:13px;">
+        Prefer the full view? <a href="https://www.polarsteps.com/AndersGrand/24481593-afrika" target="_blank" rel="noopener">Open the live trip on Polarsteps →</a>
+      </p>
+    </section>
+
+    <!-- HEALTH METRICS -->
+    <section class="panel" id="metrics">
+      <div class="panel-head">
+        <h2>Health metrics</h2>
+        <span class="eyebrow">Sample data — connects to COROS via Terra API</span>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-head"><h3>Resting heart rate — 30 days</h3><span class="now">48 bpm</span></div>
+          <canvas id="chartRHR"></canvas>
+        </div>
+        <div class="metric-card">
+          <div class="metric-head"><h3>Sleep duration — 30 days</h3><span class="now">6h 40m</span></div>
+          <canvas id="chartSleep"></canvas>
+        </div>
+        <div class="metric-card">
+          <div class="metric-head"><h3>Daily elevation gain — 14 days</h3><span class="now">890 m</span></div>
+          <canvas id="chartElev"></canvas>
+        </div>
+        <div class="metric-card">
+          <div class="metric-head"><h3>Daily distance — 14 days</h3><span class="now">112 km</span></div>
+          <canvas id="chartDist"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLEEP & RECOVERY (manual screenshots, since Strava can't provide this data) -->
+    <section class="panel" id="recovery">
+      <div class="panel-head">
+        <h2>Sleep &amp; recovery</h2>
+        <span class="eyebrow">From the COROS app — updated manually, since this data isn't available via Strava</span>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-head"><h3>Sleep</h3></div>
+          <div style="height:280px; background:#0A0E12; border-radius:6px; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+            <img src="images/sleep-screenshot.png" alt="Sleep screenshot from COROS app"
+                 style="max-width:100%; max-height:100%; object-fit:contain; display:block;"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <div style="display:none; height:100%; width:100%; align-items:center; justify-content:center; color:var(--text-dim); font-family:var(--font-mono); font-size:12px; text-align:center; padding:20px;">
+              No sleep screenshot uploaded yet —<br>add images/sleep-screenshot.png
+            </div>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-head"><h3>HRV / Recovery</h3></div>
+          <div style="height:280px; background:#0A0E12; border-radius:6px; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+            <img src="images/hrv-screenshot.png" alt="HRV and recovery screenshot from COROS app"
+                 style="max-width:100%; max-height:100%; object-fit:contain; display:block;"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <div style="display:none; height:100%; width:100%; align-items:center; justify-content:center; color:var(--text-dim); font-family:var(--font-mono); font-size:12px; text-align:center; padding:20px;">
+              No HRV screenshot uploaded yet —<br>add images/hrv-screenshot.png
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- WEATHER -->
+    <section class="panel" id="weather">
+      <div class="panel-head">
+        <h2>Conditions at current position</h2>
+        <span class="eyebrow">Sample data — connects to weather API by GPS coords</span>
+      </div>
+      <div class="weather-card">
+        <div class="weather-now">
+          <div class="temp">31°C</div>
+          <div class="cond">Humid, scattered storms</div>
+        </div>
+        <div class="weather-detail-grid">
+          <div class="weather-detail"><div class="eyebrow">Feels like</div><div class="val">37°C</div></div>
+          <div class="weather-detail"><div class="eyebrow">Wind</div><div class="val">11 km/h SE</div></div>
+          <div class="weather-detail"><div class="eyebrow">Humidity</div><div class="val">88%</div></div>
+          <div class="weather-detail"><div class="eyebrow">Precipitation</div><div class="val">70% chance</div></div>
+          <div class="weather-detail"><div class="eyebrow">UV index</div><div class="val">11 — extreme</div></div>
+          <div class="weather-detail"><div class="eyebrow">Sunset (local)</div><div class="val">18:24</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FUNDRAISING -->
+    <section class="panel" id="fundraising">
+      <div class="panel-head">
+        <h2>Fundraising</h2>
+        <span class="eyebrow">In memory of — cancer research fund</span>
+      </div>
+      <div class="fund-card">
+        <div class="fund-top">
+          <div class="amt" id="fundAmt">$0</div>
+          <div class="goal">of $50,000 goal</div>
+        </div>
+        <div class="bar-track"><div class="bar-fill" id="fundBar"></div></div>
+        <div class="fund-foot">
+          <p class="fund-note">Every kilometer is dedicated to cancer research, raised in memory of my father. Thank you for riding along.</p>
+          <a href="#" class="btn">DONATE →</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- LINKS -->
+    <section class="panel" id="follow">
+      <div class="panel-head"><h2>Follow along live</h2></div>
+      <div class="links-grid">
+        <a class="link-card" href="#">
+          <span class="eyebrow">LIVESTREAM</span>
+          <h3>Watch live on the road</h3>
+          <p>Occasional live broadcasts from the bike and campsite.</p>
+          <span class="go">OPEN STREAM →</span>
+        </a>
+        <a class="link-card" href="#">
+          <span class="eyebrow">INSTAGRAM</span>
+          <h3>@andersgrandien</h3>
+          <p>Daily photos, reels and stories from the route.</p>
+          <span class="go">OPEN INSTAGRAM →</span>
+        </a>
+        <a class="link-card" href="#">
+          <span class="eyebrow">DISPATCHES</span>
+          <h3>Written field log</h3>
+          <p>Longer-form updates from towns and checkpoints.</p>
+          <span class="go">READ LOG →</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- RECENT ACTIVITIES (live from Strava) -->
+    <section class="panel" id="activities">
+      <div class="panel-head">
+        <h2>Latest activity</h2>
+        <span class="eyebrow">Live from Strava</span>
+      </div>
+      <div id="activityFeed" class="activity-feed">
+        <p style="color:var(--text-dim); font-size:14px;">Loading recent activities…</p>
+      </div>
+    </section>
+
+    <!-- LOG -->
+    <section class="panel" id="log">
+      <div class="panel-head"><h2>Recent log</h2></div>
+      <div class="log-list">
+        <div class="log-entry">
+          <div class="day">DAY 142<br>JUL 09</div>
+          <div class="body"><span class="loc">7.9°N · PANAMA</span><p>Gear check finished ahead of the Darién put-in. Boat's packed, waiting on a break in the weather window.</p></div>
+        </div>
+        <div class="log-entry">
+          <div class="day">DAY 139<br>JUL 06</div>
+          <div class="body"><span class="loc">8.9°N · PANAMA</span><p>Last stretch of rideable road before the jungle. Legs are fine — knee from the Kyrgyzstan trip holding up so far.</p></div>
+        </div>
+        <div class="log-entry">
+          <div class="day">DAY 131<br>JUN 28</div>
+          <div class="body"><span class="loc">9.9°N · COSTA RICA</span><p>Crossed into Costa Rica. Heavy rain most of the week — resting HR creeping up, taking an easier day tomorrow.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <footer>MISSION DASHBOARD · SAMPLE DATA · BUILT FOR THE ROUTE FROM 70°N TO 55°S</footer>
+  </main>
+</div>
+
+<script>
+/* ---------------- latitude ruler ---------------- */
+// Real range for this expedition: Prudhoe Bay ~70.3°N down to Ushuaia ~54.8°S
+const LAT_TOP = 70.3;
+const LAT_BOTTOM = -54.8;
+const CURRENT_LAT = 7.9; // sample "current position" — replace with live feed
+
+const waypoints = [
+  { lat: 70.3, label: "PRUDHOE BAY" },
+  { lat: 21.0, label: "MEXICO" },
+  { lat: 8.5,  label: "DARIÉN GAP" },
+  { lat: 0.0,  label: "EQUATOR" },
+  { lat: -18.0,label: "ANDES" },
+  { lat: -54.8,label: "USHUAIA" },
+];
+
+function latToPercent(lat){
+  return ((LAT_TOP - lat) / (LAT_TOP - LAT_BOTTOM)) * 100;
+}
+
+function buildRuler(){
+  const track = document.getElementById('rulerTrack');
+  const isMobile = window.innerWidth <= 820;
+
+  // ticks every 10 degrees
+  for(let lat = 70; lat >= -50; lat -= 10){
+    const tick = document.createElement('div');
+    tick.className = 'tick' + (lat % 20 === 0 ? ' major' : '');
+    const pct = latToPercent(lat);
+    if(isMobile){ tick.style.left = pct + '%'; } else { tick.style.top = pct + '%'; }
+    track.appendChild(tick);
+  }
+
+  waypoints.forEach(wp => {
+    const dot = document.createElement('div');
+    dot.className = 'waypoint';
+    const pct = latToPercent(wp.lat);
+    if(isMobile){ dot.style.left = pct + '%'; } else { dot.style.top = pct + '%'; }
+    dot.title = wp.label;
+    track.appendChild(dot);
+  });
+
+  const you = document.createElement('div');
+  you.className = 'you-are-here';
+  const pct = latToPercent(CURRENT_LAT);
+  if(isMobile){ you.style.left = pct + '%'; } else { you.style.top = pct + '%'; }
+  you.title = 'Current position: ' + CURRENT_LAT + '°N';
+  track.appendChild(you);
+}
+buildRuler();
+
+/* ---------------- live map (Leaflet + Strava GPS) ---------------- */
+// Decodes Strava/Google's "encoded polyline" format into an array of [lat, lng] pairs.
+function decodePolyline(str){
+  let index = 0, lat = 0, lng = 0, coordinates = [];
+  while(index < str.length){
+    let b, shift = 0, result = 0;
+    do{ b = str.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while(b >= 0x20);
+    lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+    shift = 0; result = 0;
+    do{ b = str.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while(b >= 0x20);
+    lng += (result & 1) ? ~(result >> 1) : (result >> 1);
+    coordinates.push([lat / 1e5, lng / 1e5]);
+  }
+  return coordinates;
+}
+
+let leafletMap = null;
+function initMap(){
+  leafletMap = L.map('leafletMap', { zoomControl: true, attributionControl: true }).setView([20, 0], 2);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 18,
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+  }).addTo(leafletMap);
+}
+
+function plotActivityOnMap(activity){
+  if(!leafletMap || !activity) return;
+
+  if(activity.polyline){
+    const points = decodePolyline(activity.polyline);
+    if(points.length > 0){
+      const routeLine = L.polyline(points, { color: '#FF6B35', weight: 3, opacity: 0.9 }).addTo(leafletMap);
+      leafletMap.fitBounds(routeLine.getBounds(), { padding: [30, 30] });
+    }
+  } else if(activity.start_lat && activity.start_lng){
+    leafletMap.setView([activity.start_lat, activity.start_lng], 11);
+  }
+
+  if(activity.end_lat && activity.end_lng){
+    const pulseIcon = L.divIcon({
+      className: '',
+      html: '<div style="width:14px;height:14px;border-radius:50%;background:#FF6B35;box-shadow:0 0 0 6px rgba(255,107,53,0.3);"></div>',
+      iconSize: [14, 14]
+    });
+    L.marker([activity.end_lat, activity.end_lng], { icon: pulseIcon })
+      .addTo(leafletMap)
+      .bindPopup(`Last known position — ${activity.name}`);
+  }
+}
+
+initMap();
+
+/* ---------------- charts ---------------- */
+Chart.defaults.color = '#8A97A3';
+Chart.defaults.font.family = "'IBM Plex Mono', monospace";
+Chart.defaults.font.size = 10;
+
+const sparseGrid = { grid:{ color:'#26313D', drawTicks:false }, ticks:{ maxTicksLimit:4 }, border:{ display:false } };
+const noGridX = { grid:{ display:false }, ticks:{ maxTicksLimit:5 }, border:{ display:false } };
+
+function makeLineChart(id, labels, data, color){
+  new Chart(document.getElementById(id), {
+    type:'line',
+    data:{ labels, datasets:[{
+      data, borderColor: color, backgroundColor: color + '22',
+      fill:true, tension:.35, pointRadius:0, borderWidth:2
+    }]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{ x:noGridX, y:sparseGrid }
+    }
+  });
+}
+function makeBarChart(id, labels, data, color){
+  return new Chart(document.getElementById(id), {
+    type:'bar',
+    data:{ labels, datasets:[{ data, backgroundColor: color, borderRadius:3, maxBarThickness:16 }]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{ x:noGridX, y:sparseGrid }
+    }
+  });
+}
+
+// sample data — replace with real Terra API pulls
+const days30 = Array.from({length:30}, (_,i)=>'D'+(i+113));
+const rhr = [51,50,50,49,52,49,48,47,49,48,50,48,47,46,48,49,48,47,46,48,49,47,46,48,47,46,45,47,48,48];
+const sleep = [6.1,5.8,6.4,7.0,6.6,5.9,6.8,7.1,6.5,6.0,6.9,7.2,6.3,5.7,6.6,6.8,7.0,6.4,6.1,6.9,7.1,6.5,6.2,6.7,6.9,6.3,6.0,6.8,7.0,6.7];
+const days14 = Array.from({length:14}, (_,i)=>'D'+(i+129));
+const elev = [420,610,180,890,1100,340,760,920,540,300,880,1040,690,890];
+const dist = [98,110,64,132,140,80,105,128,96,72,118,135,101,112];
+
+makeLineChart('chartRHR', days30, rhr, '#8FE3E8');
+makeLineChart('chartSleep', days30, sleep, '#FF6B35');
+
+// Elevation and distance charts start with sample data, then get replaced
+// with real Strava activities if the backend function responds successfully.
+// This keeps the dashboard looking correct even before Strava is fully wired up,
+// or if the function is temporarily down.
+let elevChart = makeBarChart('chartElev', days14, elev, '#8FE3E8');
+let distChart = makeBarChart('chartDist', days14, dist, '#FF6B35');
+
+function formatDuration(min){
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function renderActivityFeed(activities){
+  const feed = document.getElementById('activityFeed');
+  if(!feed) return;
+  if(activities.length === 0){
+    feed.innerHTML = '<p style="color:var(--text-dim); font-size:14px;">No activities yet.</p>';
+    return;
+  }
+  feed.innerHTML = activities.map(a => {
+    const date = new Date(a.date).toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
+    const hr = a.average_heartrate ? `<span>${Math.round(a.average_heartrate)}<small>bpm avg</small></span>` : '';
+    return `
+      <div class="activity-row">
+        <div>
+          <div class="a-name">${a.name}</div>
+          <div class="a-date">${date}</div>
+        </div>
+        <div class="a-stats">
+          <span>${a.distance_km}<small>km</small></span>
+          <span>${formatDuration(a.moving_time_min)}</span>
+          <span>${a.elevation_gain_m}<small>m gain</small></span>
+          ${hr}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function loadStravaData(){
+  try{
+    const res = await fetch('/.netlify/functions/get-strava-data');
+    if(!res.ok) throw new Error('Function returned ' + res.status);
+    const data = await res.json();
+    const allActivities = data.activities || [];
+    if(allActivities.length === 0) return; // nothing yet, keep sample data
+
+    // Plot the single most recent activity's real GPS route on the map
+    plotActivityOnMap(allActivities[0]);
+
+    // Render the most recent activity only
+    renderActivityFeed(allActivities.slice(0, 1));
+
+    const activities = allActivities.slice(0, 14).reverse();
+
+    const labels = activities.map(a => new Date(a.date).toLocaleDateString('en-US', { month:'short', day:'numeric' }));
+    const elevData = activities.map(a => a.elevation_gain_m);
+    const distData = activities.map(a => a.distance_km);
+
+    elevChart.data.labels = labels;
+    elevChart.data.datasets[0].data = elevData;
+    elevChart.update();
+
+    distChart.data.labels = labels;
+    distChart.data.datasets[0].data = distData;
+    distChart.update();
+
+    // update the "now" figures in the card headers to the most recent activity
+    const latest = activities[activities.length - 1];
+    if(latest){
+      document.querySelectorAll('#metrics .metric-card')[2].querySelector('.now').textContent = latest.elevation_gain_m + ' m';
+      document.querySelectorAll('#metrics .metric-card')[3].querySelector('.now').textContent = latest.distance_km + ' km';
+    }
+  }catch(err){
+    // Silently keep showing sample data on the charts — this is expected until the
+    // Netlify function is deployed and environment variables are set.
+    console.log('Strava data not available yet, showing sample data:', err.message);
+    const feed = document.getElementById('activityFeed');
+    if(feed){
+      feed.innerHTML = '<p style="color:var(--text-dim); font-size:14px;">Activities will appear here once connected.</p>';
+    }
+  }
+}
+loadStravaData();
+
+/* ---------------- fundraising bar ---------------- */
+const raised = 18430, goal = 50000;
+document.getElementById('fundAmt').textContent = '$' + raised.toLocaleString();
+requestAnimationFrame(()=>{
+  document.getElementById('fundBar').style.width = Math.min(100, (raised/goal)*100) + '%';
+});
+</script>
+</body>
+</html>
