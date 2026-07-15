@@ -289,14 +289,41 @@
       </div>
     </header>
 
-    <!-- MAP -->
-    <section class="panel" id="map">
+    <!-- LATEST ACTIVITY (live from Strava) — everything about the activity in one place -->
+    <section class="panel" id="activities">
       <div class="panel-head">
-        <h2>Route &amp; position</h2>
-        <span class="eyebrow">Live from Strava — shows your most recent tracked activity</span>
+        <h2>Latest activity</h2>
+        <span class="eyebrow">Live from Strava</span>
       </div>
-      <div class="map-card" style="padding:0; overflow:hidden;">
-        <div id="leafletMap" style="width:100%; height:480px; background:#171F29;"></div>
+
+      <div class="map-card" style="padding:0; overflow:hidden; margin-bottom:20px;">
+        <div id="leafletMap" style="width:100%; height:420px; background:#171F29;"></div>
+      </div>
+
+      <div id="activityFeed" class="activity-feed">
+        <p style="color:var(--text-dim); font-size:14px;">Loading recent activities…</p>
+      </div>
+
+      <!-- expanded stat grid -->
+      <div class="detail-stat-grid" id="detailStatGrid" style="display:none;">
+        <div class="detail-stat"><div class="eyebrow">Calories</div><div class="val" id="statCalories">—</div></div>
+        <div class="detail-stat"><div class="eyebrow">Elevation high</div><div class="val" id="statElevHigh">—</div></div>
+        <div class="detail-stat"><div class="eyebrow">Elevation low</div><div class="val" id="statElevLow">—</div></div>
+        <div class="detail-stat"><div class="eyebrow">Avg cadence</div><div class="val" id="statCadence">—</div></div>
+        <div class="detail-stat"><div class="eyebrow">Avg power</div><div class="val" id="statPower">—</div></div>
+        <div class="detail-stat"><div class="eyebrow">Relative effort</div><div class="val" id="statSuffer">—</div></div>
+      </div>
+
+      <!-- HR zones + splits, side by side -->
+      <div class="detail-charts-grid" id="detailChartsGrid" style="display:none;">
+        <div class="metric-card">
+          <div class="metric-head"><h3>Time in heart rate zones</h3></div>
+          <canvas id="chartHrZones"></canvas>
+        </div>
+        <div class="metric-card">
+          <div class="metric-head"><h3>Pace per km</h3></div>
+          <canvas id="chartSplits"></canvas>
+        </div>
       </div>
     </section>
 
@@ -449,39 +476,6 @@
           <p>Longer-form updates from towns and checkpoints.</p>
           <span class="go">READ LOG →</span>
         </a>
-      </div>
-    </section>
-
-    <!-- LATEST ACTIVITY (live from Strava) -->
-    <section class="panel" id="activities">
-      <div class="panel-head">
-        <h2>Latest activity</h2>
-        <span class="eyebrow">Live from Strava</span>
-      </div>
-      <div id="activityFeed" class="activity-feed">
-        <p style="color:var(--text-dim); font-size:14px;">Loading recent activities…</p>
-      </div>
-
-      <!-- expanded stat grid -->
-      <div class="detail-stat-grid" id="detailStatGrid" style="display:none;">
-        <div class="detail-stat"><div class="eyebrow">Calories</div><div class="val" id="statCalories">—</div></div>
-        <div class="detail-stat"><div class="eyebrow">Elevation high</div><div class="val" id="statElevHigh">—</div></div>
-        <div class="detail-stat"><div class="eyebrow">Elevation low</div><div class="val" id="statElevLow">—</div></div>
-        <div class="detail-stat"><div class="eyebrow">Avg cadence</div><div class="val" id="statCadence">—</div></div>
-        <div class="detail-stat"><div class="eyebrow">Avg power</div><div class="val" id="statPower">—</div></div>
-        <div class="detail-stat"><div class="eyebrow">Relative effort</div><div class="val" id="statSuffer">—</div></div>
-      </div>
-
-      <!-- HR zones + splits, side by side -->
-      <div class="detail-charts-grid" id="detailChartsGrid" style="display:none;">
-        <div class="metric-card">
-          <div class="metric-head"><h3>Time in heart rate zones</h3></div>
-          <canvas id="chartHrZones"></canvas>
-        </div>
-        <div class="metric-card">
-          <div class="metric-head"><h3>Pace per km</h3></div>
-          <canvas id="chartSplits"></canvas>
-        </div>
       </div>
     </section>
 
