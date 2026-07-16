@@ -427,20 +427,20 @@
     <section class="panel" id="weather">
       <div class="panel-head">
         <h2>Conditions at current position</h2>
-        <span class="eyebrow">Sample data — connects to weather API by GPS coords</span>
+        <span class="eyebrow" id="weatherLocationLabel">Live from Open-Meteo — based on last known position</span>
       </div>
       <div class="weather-card">
         <div class="weather-now">
-          <div class="temp">31°C</div>
-          <div class="cond">Humid, scattered storms</div>
+          <div class="temp" id="weatherTemp">—°C</div>
+          <div class="cond" id="weatherCond">Loading conditions…</div>
         </div>
         <div class="weather-detail-grid">
-          <div class="weather-detail"><div class="eyebrow">Feels like</div><div class="val">37°C</div></div>
-          <div class="weather-detail"><div class="eyebrow">Wind</div><div class="val">11 km/h SE</div></div>
-          <div class="weather-detail"><div class="eyebrow">Humidity</div><div class="val">88%</div></div>
-          <div class="weather-detail"><div class="eyebrow">Precipitation</div><div class="val">70% chance</div></div>
-          <div class="weather-detail"><div class="eyebrow">UV index</div><div class="val">11 — extreme</div></div>
-          <div class="weather-detail"><div class="eyebrow">Sunset (local)</div><div class="val">18:24</div></div>
+          <div class="weather-detail"><div class="eyebrow">Feels like</div><div class="val" id="weatherFeelsLike">—</div></div>
+          <div class="weather-detail"><div class="eyebrow">Wind</div><div class="val" id="weatherWind">—</div></div>
+          <div class="weather-detail"><div class="eyebrow">Humidity</div><div class="val" id="weatherHumidity">—</div></div>
+          <div class="weather-detail"><div class="eyebrow">Precipitation</div><div class="val" id="weatherPrecip">—</div></div>
+          <div class="weather-detail"><div class="eyebrow">UV index</div><div class="val" id="weatherUv">—</div></div>
+          <div class="weather-detail"><div class="eyebrow">Sunset (local)</div><div class="val" id="weatherSunset">—</div></div>
         </div>
       </div>
     </section>
@@ -563,6 +563,72 @@ function buildRuler(){
 }
 buildRuler();
 
+/* ---------------- live weather (Open-Meteo, no API key needed) ---------------- */
+// WMO weather codes -> human-readable condition text
+const WEATHER_CODE_MAP = {
+  0: 'Clear sky', 1: 'Mostly clear', 2: 'Partly cloudy', 3: 'Overcast',
+  45: 'Fog', 48: 'Depositing rime fog',
+  51: 'Light drizzle', 53: 'Drizzle', 55: 'Dense drizzle',
+  56: 'Freezing drizzle', 57: 'Dense freezing drizzle',
+  61: 'Light rain', 63: 'Rain', 65: 'Heavy rain',
+  66: 'Freezing rain', 67: 'Heavy freezing rain',
+  71: 'Light snow', 73: 'Snow', 75: 'Heavy snow', 77: 'Snow grains',
+  80: 'Light showers', 81: 'Showers', 82: 'Violent showers',
+  85: 'Light snow showers', 86: 'Heavy snow showers',
+  95: 'Thunderstorm', 96: 'Thunderstorm with hail', 99: 'Severe thunderstorm with hail'
+};
+
+function windDirectionLabel(deg){
+  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round(deg / 22.5) % 16];
+}
+
+function uvLabel(uv){
+  if(uv == null) return '—';
+  let level = 'Low';
+  if(uv >= 11) level = 'Extreme';
+  else if(uv >= 8) level = 'Very high';
+  else if(uv >= 6) level = 'High';
+  else if(uv >= 3) level = 'Moderate';
+  return `${Math.round(uv)} — ${level}`;
+}
+
+async function loadWeather(lat, lon, locationName){
+  try{
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation_probability,wind_speed_10m,wind_direction_10m,weather_code` +
+      `&daily=uv_index_max,sunset&timezone=auto`;
+
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('Weather fetch failed: ' + res.status);
+    const w = await res.json();
+
+    const c = w.current || {};
+    const d = w.daily || {};
+
+    document.getElementById('weatherTemp').textContent = (c.temperature_2m != null ? Math.round(c.temperature_2m) : '—') + '°C';
+    document.getElementById('weatherCond').textContent = WEATHER_CODE_MAP[c.weather_code] || 'Conditions unavailable';
+    document.getElementById('weatherFeelsLike').textContent = c.apparent_temperature != null ? Math.round(c.apparent_temperature) + '°C' : '—';
+    document.getElementById('weatherWind').textContent = (c.wind_speed_10m != null)
+      ? `${Math.round(c.wind_speed_10m)} km/h ${c.wind_direction_10m != null ? windDirectionLabel(c.wind_direction_10m) : ''}`
+      : '—';
+    document.getElementById('weatherHumidity').textContent = c.relative_humidity_2m != null ? c.relative_humidity_2m + '%' : '—';
+    document.getElementById('weatherPrecip').textContent = c.precipitation_probability != null ? c.precipitation_probability + '% chance' : '—';
+    document.getElementById('weatherUv').textContent = d.uv_index_max && d.uv_index_max[0] != null ? uvLabel(d.uv_index_max[0]) : '—';
+    document.getElementById('weatherSunset').textContent = d.sunset && d.sunset[0]
+      ? new Date(d.sunset[0]).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })
+      : '—';
+
+    const label = document.getElementById('weatherLocationLabel');
+    if(label) label.textContent = locationName ? `Live from Open-Meteo — ${locationName}` : 'Live from Open-Meteo — last known position';
+  }catch(err){
+    console.log('Weather could not be loaded:', err.message);
+    const label = document.getElementById('weatherLocationLabel');
+    if(label) label.textContent = 'Weather unavailable right now';
+    document.getElementById('weatherCond').textContent = 'Unavailable';
+  }
+}
+
 /* ---------------- live map (Leaflet + Strava GPS) ---------------- */
 // Decodes Strava/Google's "encoded polyline" format into an array of [lat, lng] pairs.
 function decodePolyline(str){
@@ -641,6 +707,11 @@ try{
   const mapEl = document.getElementById('leafletMap');
   if(mapEl) mapEl.innerHTML = '<div style="color:#8A97A3; font-family:monospace; font-size:12px; padding:20px;">Map failed to load.</div>';
 }
+
+// Load a default weather view immediately (Stockholm, home base) so the
+// section isn't stuck on "Loading..." — this gets overwritten with your
+// real last-known position once Strava data resolves below.
+loadWeather(59.33, 18.06, 'Stockholm (default, awaiting live position)');
 
 /* ---------------- charts ---------------- */
 Chart.defaults.color = '#8A97A3';
@@ -890,6 +961,12 @@ async function loadStravaData(){
     // Render the expanded detail view (zones, splits, stats) for the latest activity
     if(activityDetailsGlobal[latestTwo[0].id]){
       renderActivityDetail(activityDetailsGlobal[latestTwo[0].id]);
+    }
+
+    // Load weather for the most recent known position (end point of latest activity)
+    const latestActivity = latestTwo[0];
+    if(latestActivity && latestActivity.end_lat && latestActivity.end_lng){
+      loadWeather(latestActivity.end_lat, latestActivity.end_lng);
     }
 
     // Elevation/distance charts now show just these 2 activities, not a 14-day trend
