@@ -210,13 +210,13 @@
 
   /* activity detail: stat grid + charts */
   .detail-stat-grid{
-    display:grid; grid-template-columns:repeat(6,1fr); gap:1px;
+    display:grid; grid-template-columns:repeat(8,1fr); gap:1px;
     background:var(--line); margin-top:24px; border:1px solid var(--line);
   }
-  @media (max-width:900px){ .detail-stat-grid{grid-template-columns:repeat(3,1fr);} }
-  @media (max-width:500px){ .detail-stat-grid{grid-template-columns:repeat(2,1fr);} }
-  .detail-stat{background:var(--panel); padding:16px 14px;}
-  .detail-stat .val{font-family:var(--font-mono); font-size:19px; color:var(--paper); margin-top:6px;}
+  @media (max-width:1000px){ .detail-stat-grid{grid-template-columns:repeat(4,1fr);} }
+  @media (max-width:600px){ .detail-stat-grid{grid-template-columns:repeat(2,1fr);} }
+  .detail-stat{background:var(--panel); padding:14px 12px;}
+  .detail-stat .val{font-family:var(--font-mono); font-size:16px; color:var(--paper); margin-top:6px;}
   .detail-charts-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;}
   @media (max-width:700px){ .detail-charts-grid{grid-template-columns:1fr;} }
 
@@ -280,11 +280,11 @@
         </div>
         <div class="stat">
           <div class="eyebrow">Distance covered</div>
-          <div class="val">6,840 <small>km</small></div>
+          <div class="val" id="statCovered">0 <small>km</small></div>
         </div>
         <div class="stat">
           <div class="eyebrow">Remaining</div>
-          <div class="val">~10,400 <small>km</small></div>
+          <div class="val" id="statRemaining">~23,000 <small>km</small></div>
         </div>
       </div>
     </header>
@@ -306,12 +306,22 @@
 
       <!-- expanded stat grid -->
       <div class="detail-stat-grid" id="detailStatGrid" style="display:none;">
+        <div class="detail-stat"><div class="eyebrow">Moving time</div><div class="val" id="statMovingTime">—</div></div>
+        <div class="detail-stat"><div class="eyebrow">Elapsed time</div><div class="val" id="statElapsedTime">—</div></div>
+        <div class="detail-stat"><div class="eyebrow">Avg speed</div><div class="val" id="statAvgSpeed">—</div></div>
+        <div class="detail-stat"><div class="eyebrow">Max speed</div><div class="val" id="statMaxSpeed">—</div></div>
+        <div class="detail-stat"><div class="eyebrow">Avg heart rate</div><div class="val" id="statAvgHr">—</div></div>
+        <div class="detail-stat"><div class="eyebrow">Max heart rate</div><div class="val" id="statMaxHr">—</div></div>
         <div class="detail-stat"><div class="eyebrow">Calories</div><div class="val" id="statCalories">—</div></div>
         <div class="detail-stat"><div class="eyebrow">Elevation high</div><div class="val" id="statElevHigh">—</div></div>
         <div class="detail-stat"><div class="eyebrow">Elevation low</div><div class="val" id="statElevLow">—</div></div>
         <div class="detail-stat"><div class="eyebrow">Avg cadence</div><div class="val" id="statCadence">—</div></div>
         <div class="detail-stat"><div class="eyebrow">Avg power</div><div class="val" id="statPower">—</div></div>
+        <div class="detail-stat"><div class="eyebrow">Max power</div><div class="val" id="statMaxPower">—</div></div>
         <div class="detail-stat"><div class="eyebrow">Relative effort</div><div class="val" id="statSuffer">—</div></div>
+        <div class="detail-stat"><div class="eyebrow">Achievements</div><div class="val" id="statAchievements">—</div></div>
+        <div class="detail-stat"><div class="eyebrow">PRs</div><div class="val" id="statPRs">—</div></div>
+        <div class="detail-stat"><div class="eyebrow">Device</div><div class="val" id="statDevice" style="font-size:13px;">—</div></div>
       </div>
 
       <!-- HR zones + splits, side by side -->
@@ -753,12 +763,28 @@ function renderActivityDetail(detail){
   const statGrid = document.getElementById('detailStatGrid');
   const chartsGrid = document.getElementById('detailChartsGrid');
 
-  document.getElementById('statCalories').textContent = detail.calories != null ? detail.calories + ' kcal' : '—';
-  document.getElementById('statElevHigh').textContent = detail.elev_high_m != null ? detail.elev_high_m + ' m' : '—';
-  document.getElementById('statElevLow').textContent = detail.elev_low_m != null ? detail.elev_low_m + ' m' : '—';
-  document.getElementById('statCadence').textContent = detail.average_cadence != null ? detail.average_cadence + ' rpm' : '—';
-  document.getElementById('statPower').textContent = detail.weighted_average_watts != null ? detail.weighted_average_watts + ' W' : '—';
-  document.getElementById('statSuffer').textContent = detail.suffer_score != null ? detail.suffer_score : '—';
+  const setStat = (id, value, suffix) => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = (value != null) ? (value + (suffix || '')) : '—';
+  };
+
+  setStat('statMovingTime', detail.moving_time_min != null ? formatDuration(detail.moving_time_min) : null);
+  setStat('statElapsedTime', detail.elapsed_time_min != null ? formatDuration(detail.elapsed_time_min) : null);
+  setStat('statAvgSpeed', detail.average_speed_kmh, ' km/h');
+  setStat('statMaxSpeed', detail.max_speed_kmh, ' km/h');
+  setStat('statAvgHr', detail.average_heartrate, ' bpm');
+  setStat('statMaxHr', detail.max_heartrate, ' bpm');
+  setStat('statCalories', detail.calories, ' kcal');
+  setStat('statElevHigh', detail.elev_high_m, ' m');
+  setStat('statElevLow', detail.elev_low_m, ' m');
+  setStat('statCadence', detail.average_cadence, ' rpm');
+  setStat('statPower', detail.weighted_average_watts, ' W');
+  setStat('statMaxPower', detail.max_watts, ' W');
+  setStat('statSuffer', detail.suffer_score);
+  setStat('statAchievements', detail.achievement_count);
+  setStat('statPRs', detail.pr_count);
+  setStat('statDevice', detail.device_name);
+
   statGrid.style.display = 'grid';
 
   // Heart rate zones — Strava zone colors, cool (recovery) to hot (max effort)
@@ -835,6 +861,19 @@ async function loadStravaData(){
 
     allActivitiesGlobal = allActivities;
     activityDetailsGlobal = data.activityDetails || {};
+
+    // Hero stats: distance covered = sum of fetched Strava activities,
+    // remaining = fixed expedition target minus that.
+    const EXPEDITION_TARGET_KM = 23000;
+    const covered = data.totalDistanceKm != null
+      ? data.totalDistanceKm
+      : allActivities.reduce((sum, a) => sum + (a.distance_km || 0), 0);
+    const remaining = Math.max(0, EXPEDITION_TARGET_KM - covered);
+
+    const coveredEl = document.getElementById('statCovered');
+    const remainingEl = document.getElementById('statRemaining');
+    if(coveredEl) coveredEl.innerHTML = Math.round(covered).toLocaleString() + ' <small>km</small>';
+    if(remainingEl) remainingEl.innerHTML = '~' + Math.round(remaining).toLocaleString() + ' <small>km</small>';
 
     const latestTwo = allActivities.slice(0, 2);
 
