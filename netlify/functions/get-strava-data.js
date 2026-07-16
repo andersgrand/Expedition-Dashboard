@@ -84,29 +84,28 @@ exports.handler = async function (event, context) {
       end_lng: a.end_latlng ? a.end_latlng[1] : null,
     }));
 
-    // Step 3: pull a richer detail view + heart rate zones for the single
-    // most recent activity only (keeps API usage low — we don't do this
-    // for all 30, just the one the dashboard highlights).
-    let latestDetail = null;
-    if (trimmed.length > 0) {
-      const latestId = trimmed[0].id;
+    // Step 3: pull a richer detail view + heart rate zones for the 2 most
+    // recent activities only (keeps API usage low — we don't do this for
+    // all 30, just the ones the dashboard highlights).
+    const activityDetails = {};
+    const idsToDetail = trimmed.slice(0, 2).map((a) => a.id);
 
+    for (const id of idsToDetail) {
       const [detailRes, zonesRes] = await Promise.all([
-        fetch(`https://www.strava.com/api/v3/activities/${latestId}`, {
+        fetch(`https://www.strava.com/api/v3/activities/${id}`, {
           headers: { Authorization: `Bearer ${accessToken}` },
         }),
-        fetch(`https://www.strava.com/api/v3/activities/${latestId}/zones`, {
+        fetch(`https://www.strava.com/api/v3/activities/${id}/zones`, {
           headers: { Authorization: `Bearer ${accessToken}` },
         }),
       ]);
 
       const detail = detailRes.ok ? await detailRes.json() : null;
       const zones = zonesRes.ok ? await zonesRes.json() : [];
-
       const hrZoneBlock = zones.find((z) => z.type === "heartrate");
 
-      latestDetail = {
-        id: latestId,
+      activityDetails[id] = {
+        id,
         calories: detail && detail.calories ? Math.round(detail.calories) : null,
         elev_high_m: detail && detail.elev_high != null ? Math.round(detail.elev_high) : null,
         elev_low_m: detail && detail.elev_low != null ? Math.round(detail.elev_low) : null,
@@ -114,7 +113,6 @@ exports.handler = async function (event, context) {
         weighted_average_watts: detail && detail.weighted_average_watts ? Math.round(detail.weighted_average_watts) : null,
         suffer_score: detail && detail.suffer_score ? detail.suffer_score : null,
         kudos_count: detail && detail.kudos_count != null ? detail.kudos_count : null,
-        // km splits: distance (m), pace (seconds/km -> we convert), elevation
         splits: detail && detail.splits_metric
           ? detail.splits_metric.map((s) => ({
               split: s.split,
@@ -125,7 +123,6 @@ exports.handler = async function (event, context) {
               pace_min_per_km: s.moving_time && s.distance ? +((s.moving_time / (s.distance / 1000)) / 60).toFixed(2) : null,
             }))
           : [],
-        // heart rate zone distribution: time (seconds) spent in each zone
         hr_zones: hrZoneBlock
           ? hrZoneBlock.distribution_buckets.map((b, i) => ({
               zone: i + 1,
@@ -144,7 +141,7 @@ exports.handler = async function (event, context) {
         // cache for 10 minutes so we're not hammering Strava's API on every page view
         "Cache-Control": "public, max-age=600",
       },
-      body: JSON.stringify({ activities: trimmed, latestDetail }),
+      body: JSON.stringify({ activities: trimmed, activityDetails }),
     };
   } catch (err) {
     return {
