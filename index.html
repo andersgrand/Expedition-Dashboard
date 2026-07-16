@@ -581,11 +581,32 @@ function initMap(){
 function plotActivityOnMap(activity){
   if(!leafletMap || !activity) return;
 
+  // clear any previously drawn route/markers before drawing the new one
+  leafletMap.eachLayer(layer => {
+    if(layer instanceof L.Polyline || layer instanceof L.Marker) leafletMap.removeLayer(layer);
+  });
+
+  // Leaflet can miscalculate its size if the container wasn't fully laid out
+  // when the map was created — forcing a resize check right before fitting
+  // bounds fixes the "zoomed to a single point" bug.
+  leafletMap.invalidateSize();
+
   if(activity.polyline){
     const points = decodePolyline(activity.polyline);
     if(points.length > 0){
       const routeLine = L.polyline(points, { color: '#FF6B35', weight: 3, opacity: 0.9 }).addTo(leafletMap);
-      leafletMap.fitBounds(routeLine.getBounds(), { padding: [30, 30] });
+
+      const startIcon = L.divIcon({
+        className: '',
+        html: '<div style="width:10px;height:10px;border-radius:50%;background:#8FE3E8;border:2px solid #0A0E12;"></div>',
+        iconSize: [10, 10]
+      });
+      L.marker(points[0], { icon: startIcon }).addTo(leafletMap).bindPopup('Start');
+
+      requestAnimationFrame(() => {
+        leafletMap.invalidateSize();
+        leafletMap.fitBounds(routeLine.getBounds(), { padding: [30, 30] });
+      });
     }
   } else if(activity.start_lat && activity.start_lng){
     leafletMap.setView([activity.start_lat, activity.start_lng], 11);
@@ -599,7 +620,7 @@ function plotActivityOnMap(activity){
     });
     L.marker([activity.end_lat, activity.end_lng], { icon: pulseIcon })
       .addTo(leafletMap)
-      .bindPopup(`Last known position — ${activity.name}`);
+      .bindPopup(`Finish — ${activity.name}`);
   }
 }
 
@@ -663,6 +684,9 @@ makeLineChart('chartSleep', days30, sleep, '#FF6B35');
 let elevChart = makeBarChart('chartElev', days14, elev, '#8FE3E8');
 let distChart = makeBarChart('chartDist', days14, dist, '#FF6B35');
 
+let allActivitiesGlobal = [];
+let activityDetailsGlobal = {};
+
 function formatDuration(min){
   const h = Math.floor(min / 60);
   const m = Math.round(min % 60);
@@ -676,11 +700,11 @@ function renderActivityFeed(activities){
     feed.innerHTML = '<p style="color:var(--text-dim); font-size:14px;">No activities yet.</p>';
     return;
   }
-  feed.innerHTML = activities.map(a => {
+  feed.innerHTML = activities.map((a, i) => {
     const date = new Date(a.date).toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
     const hr = a.average_heartrate ? `<span>${Math.round(a.average_heartrate)}<small>bpm avg</small></span>` : '';
     return `
-      <div class="activity-row">
+      <div class="activity-row" data-activity-id="${a.id}" style="cursor:pointer;" ${i === 0 ? 'data-selected="true"' : ''}>
         <div>
           <div class="a-name">${a.name}</div>
           <div class="a-date">${date}</div>
@@ -693,6 +717,34 @@ function renderActivityFeed(activities){
         </div>
       </div>`;
   }).join('');
+
+  // wire up click-to-select
+  feed.querySelectorAll('.activity-row').forEach(row => {
+    row.addEventListener('click', () => selectActivity(row.dataset.activityId));
+  });
+  updateFeedHighlight();
+}
+
+function updateFeedHighlight(){
+  document.querySelectorAll('#activityFeed .activity-row').forEach(row => {
+    const isSelected = row.dataset.selected === 'true';
+    row.style.background = isSelected ? 'rgba(143,227,232,0.06)' : 'transparent';
+    row.style.borderLeft = isSelected ? '2px solid var(--ice)' : '2px solid transparent';
+    row.style.paddingLeft = isSelected ? '10px' : '12px';
+  });
+}
+
+function selectActivity(id){
+  const activity = allActivitiesGlobal.find(a => String(a.id) === String(id));
+  if(!activity) return;
+
+  document.querySelectorAll('#activityFeed .activity-row').forEach(row => {
+    row.dataset.selected = String(row.dataset.activityId) === String(id);
+  });
+  updateFeedHighlight();
+
+  plotActivityOnMap(activity);
+  renderActivityDetail(activityDetailsGlobal[id]);
 }
 
 function renderActivityDetail(detail){
@@ -781,26 +833,34 @@ async function loadStravaData(){
     const allActivities = data.activities || [];
     if(allActivities.length === 0) return; // nothing yet, keep sample data
 
-    // Plot the single most recent activity's real GPS route on the map
+    allActivitiesGlobal = allActivities;
+    activityDetailsGlobal = data.activityDetails || {};
+
+    const latestTwo = allActivities.slice(0, 2);
+
+    // Plot the most recent activity's real GPS route on the map (default view)
     try{
-      plotActivityOnMap(allActivities[0]);
+      plotActivityOnMap(latestTwo[0]);
     }catch(mapErr){
       console.log('Could not plot route on map:', mapErr.message);
     }
 
-    // Render the most recent activity only
-    renderActivityFeed(allActivities.slice(0, 1));
+    // Show the 2 most recent activities in the feed (clickable to switch the map/detail above)
+    renderActivityFeed(latestTwo);
 
     // Render the expanded detail view (zones, splits, stats) for the latest activity
-    if(data.latestDetail){
-      renderActivityDetail(data.latestDetail);
+    if(activityDetailsGlobal[latestTwo[0].id]){
+      renderActivityDetail(activityDetailsGlobal[latestTwo[0].id]);
     }
 
-    const activities = allActivities.slice(0, 14).reverse();
-
-    const labels = activities.map(a => new Date(a.date).toLocaleDateString('en-US', { month:'short', day:'numeric' }));
-    const elevData = activities.map(a => a.elevation_gain_m);
-    const distData = activities.map(a => a.distance_km);
+    // Elevation/distance charts now show just these 2 activities, not a 14-day trend
+    const chartActivities = [...latestTwo].reverse(); // oldest first, left to right
+    const labels = chartActivities.map(a => {
+      const date = new Date(a.date).toLocaleDateString('en-US', { month:'short', day:'numeric' });
+      return a.name.length > 14 ? a.name.slice(0, 14) + '…' : a.name;
+    });
+    const elevData = chartActivities.map(a => a.elevation_gain_m);
+    const distData = chartActivities.map(a => a.distance_km);
 
     elevChart.data.labels = labels;
     elevChart.data.datasets[0].data = elevData;
@@ -811,7 +871,7 @@ async function loadStravaData(){
     distChart.update();
 
     // update the "now" figures in the card headers to the most recent activity
-    const latest = activities[activities.length - 1];
+    const latest = latestTwo[0];
     if(latest){
       document.querySelectorAll('#metrics .metric-card')[2].querySelector('.now').textContent = latest.elevation_gain_m + ' m';
       document.querySelectorAll('#metrics .metric-card')[3].querySelector('.now').textContent = latest.distance_km + ' km';
