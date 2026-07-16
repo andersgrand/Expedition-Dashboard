@@ -111,8 +111,19 @@ exports.handler = async function (event, context) {
         elev_low_m: detail && detail.elev_low != null ? Math.round(detail.elev_low) : null,
         average_cadence: detail && detail.average_cadence ? Math.round(detail.average_cadence) : null,
         weighted_average_watts: detail && detail.weighted_average_watts ? Math.round(detail.weighted_average_watts) : null,
+        max_watts: detail && detail.max_watts ? Math.round(detail.max_watts) : null,
         suffer_score: detail && detail.suffer_score ? detail.suffer_score : null,
         kudos_count: detail && detail.kudos_count != null ? detail.kudos_count : null,
+        achievement_count: detail && detail.achievement_count != null ? detail.achievement_count : null,
+        pr_count: detail && detail.pr_count != null ? detail.pr_count : null,
+        moving_time_min: detail && detail.moving_time != null ? Math.round(detail.moving_time / 60) : null,
+        elapsed_time_min: detail && detail.elapsed_time != null ? Math.round(detail.elapsed_time / 60) : null,
+        average_speed_kmh: detail && detail.average_speed != null ? +(detail.average_speed * 3.6).toFixed(1) : null,
+        max_speed_kmh: detail && detail.max_speed != null ? +(detail.max_speed * 3.6).toFixed(1) : null,
+        average_heartrate: detail && detail.average_heartrate ? Math.round(detail.average_heartrate) : null,
+        max_heartrate: detail && detail.max_heartrate ? Math.round(detail.max_heartrate) : null,
+        device_name: detail && detail.device_name ? detail.device_name : null,
+        description: detail && detail.description ? detail.description : null,
         splits: detail && detail.splits_metric
           ? detail.splits_metric.map((s) => ({
               split: s.split,
@@ -134,6 +145,10 @@ exports.handler = async function (event, context) {
       };
     }
 
+    // Total distance across all fetched activities (used to drive the
+    // "distance covered" figure on the dashboard's hero stats)
+    const totalDistanceKm = trimmed.reduce((sum, a) => sum + (a.distance_km || 0), 0);
+
     return {
       statusCode: 200,
       headers: {
@@ -141,7 +156,11 @@ exports.handler = async function (event, context) {
         // cache for 10 minutes so we're not hammering Strava's API on every page view
         "Cache-Control": "public, max-age=600",
       },
-      body: JSON.stringify({ activities: trimmed, activityDetails }),
+      body: JSON.stringify({
+        activities: trimmed,
+        activityDetails,
+        totalDistanceKm: +totalDistanceKm.toFixed(1),
+      }),
     };
   } catch (err) {
     return {
