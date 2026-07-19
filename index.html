@@ -334,6 +334,28 @@
       </div>
     </header>
 
+    <!-- WEATHER -->
+    <section class="panel" id="weather">
+      <div class="panel-head">
+        <h2>These are the conditions Anders is facing right now</h2>
+        <span class="eyebrow" id="weatherLocationLabel">Live from Open-Meteo — based on last known position</span>
+      </div>
+      <div class="weather-card">
+        <div class="weather-now">
+          <div class="temp" id="weatherTemp">—°C</div>
+          <div class="cond" id="weatherCond">Loading conditions…</div>
+        </div>
+        <div class="weather-detail-grid">
+          <div class="weather-detail"><div class="eyebrow">Feels like</div><div class="val" id="weatherFeelsLike">—</div></div>
+          <div class="weather-detail"><div class="eyebrow">Wind</div><div class="val" id="weatherWind">—</div></div>
+          <div class="weather-detail"><div class="eyebrow">Humidity</div><div class="val" id="weatherHumidity">—</div></div>
+          <div class="weather-detail"><div class="eyebrow">Precipitation</div><div class="val" id="weatherPrecip">—</div></div>
+          <div class="weather-detail"><div class="eyebrow">UV index</div><div class="val" id="weatherUv">—</div></div>
+          <div class="weather-detail"><div class="eyebrow">Sunset (local)</div><div class="val" id="weatherSunset">—</div></div>
+        </div>
+      </div>
+    </section>
+
     <!-- LATEST ACTIVITY (live from Strava) — everything about the activity in one place -->
     <section class="panel" id="activities">
       <div class="panel-head">
@@ -395,19 +417,28 @@
         <h2>Live location</h2>
         <span class="eyebrow">Powered by Polarsteps — test trip embedded for now, swap in the real one later</span>
       </div>
-      <div class="map-card" style="padding:0; overflow:hidden;">
+      <div class="map-card polarsteps-crop" style="padding:0; overflow:hidden; height:560px;">
         <!--
           REPLACE THE src BELOW with your own public Polarsteps trip URL.
           Find it by opening your trip on polarsteps.com and copying the address bar link,
           e.g. https://www.polarsteps.com/YourUsername/12345-alaska-to-argentina
           Your trip must be set to "Public" in Polarsteps' privacy settings for this to work.
+
+          NOTE on the cookie banner: this is a third-party embed on a different
+          domain, so browser security rules block us from reaching inside it to
+          resize or hide their cookie banner directly. The trick below renders
+          the iframe TALLER than the visible box and clips the extra height —
+          this crops off a bottom-anchored banner in most cases, but isn't
+          guaranteed for every layout Polarsteps might serve (e.g. a centered
+          modal instead of a bottom bar). Check the live site after deploying;
+          if it's still showing, the numbers below can be tuned.
         -->
         <iframe
           src="https://www.polarsteps.com/AndersGrand/24481593-afrika/embed"
           title="Live Polarsteps trip map"
           width="640"
           height="480"
-          style="width:100%; height:560px; border:0; display:block;"
+          style="width:100%; height:820px; border:0; display:block;"
           loading="lazy"
           allow="geolocation"
         ></iframe>
@@ -517,27 +548,7 @@
       </div>
     </section>
 
-    <!-- WEATHER -->
-    <section class="panel" id="weather">
-      <div class="panel-head">
-        <h2>Conditions at current position</h2>
-        <span class="eyebrow" id="weatherLocationLabel">Live from Open-Meteo — based on last known position</span>
-      </div>
-      <div class="weather-card">
-        <div class="weather-now">
-          <div class="temp" id="weatherTemp">—°C</div>
-          <div class="cond" id="weatherCond">Loading conditions…</div>
-        </div>
-        <div class="weather-detail-grid">
-          <div class="weather-detail"><div class="eyebrow">Feels like</div><div class="val" id="weatherFeelsLike">—</div></div>
-          <div class="weather-detail"><div class="eyebrow">Wind</div><div class="val" id="weatherWind">—</div></div>
-          <div class="weather-detail"><div class="eyebrow">Humidity</div><div class="val" id="weatherHumidity">—</div></div>
-          <div class="weather-detail"><div class="eyebrow">Precipitation</div><div class="val" id="weatherPrecip">—</div></div>
-          <div class="weather-detail"><div class="eyebrow">UV index</div><div class="val" id="weatherUv">—</div></div>
-          <div class="weather-detail"><div class="eyebrow">Sunset (local)</div><div class="val" id="weatherSunset">—</div></div>
-        </div>
-      </div>
-    </section>
+
 
     <!-- FUNDRAISING -->
     <section class="panel" id="fundraising">
