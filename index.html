@@ -133,11 +133,15 @@
   .hero h1 span{color:var(--ice);}
   .hero p.sub{color:var(--text-dim); font-size:16px; margin-top:16px; max-width:560px;}
 
-  .hero-cta{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-top:24px; }
+  .hero-cta{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:24px; }
   .btn-live{ display:inline-flex; align-items:center; gap:8px; background:transparent; border:1px solid var(--signal); color:var(--signal); }
   .btn-live:hover{ background:rgba(255,107,53,0.1); text-decoration:none; }
   .live-dot{ width:7px; height:7px; border-radius:50%; background:var(--signal); animation:pulse 2.2s infinite; }
-  .hero-cta-text{ color:var(--text-dim); font-size:13px; max-width:420px; }
+  .btn-support{ background:transparent; border:1px solid var(--ice); color:var(--ice); }
+  .btn-support:hover{ background:rgba(143,227,232,0.1); text-decoration:none; }
+  .btn-charity{ background:transparent; border:1px solid var(--paper); color:var(--paper); }
+  .btn-charity:hover{ background:rgba(239,234,224,0.08); text-decoration:none; }
+  .hero-cta-text{ color:var(--text-dim); font-size:13px; max-width:520px; }
 
   .stat-row{
     display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
@@ -178,14 +182,15 @@
 
   /* weather */
   .weather-card{
-    display:flex; gap:32px; flex-wrap:wrap; align-items:center;
-    background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:24px;
+    display:flex; gap:24px; flex-wrap:wrap; align-items:center;
+    background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:14px 20px;
   }
-  .weather-now .temp{font-family:var(--font-display); font-size:56px; color:var(--paper); line-height:1;}
-  .weather-now .cond{color:var(--text-dim); margin-top:4px;}
-  .weather-detail-grid{display:grid; grid-template-columns:repeat(3,auto); gap:24px; flex:1;}
-  .weather-detail .eyebrow{margin-bottom:4px;}
-  .weather-detail .val{font-family:var(--font-mono); color:var(--paper); font-size:16px;}
+  .weather-now .temp{font-family:var(--font-display); font-size:32px; color:var(--paper); line-height:1;}
+  .weather-now .cond{color:var(--text-dim); margin-top:2px; font-size:13px;}
+  .weather-detail-grid{display:grid; grid-template-columns:repeat(3,auto); gap:16px 24px; flex:1;}
+  .weather-detail .eyebrow{margin-bottom:2px; font-size:10px;}
+  .weather-detail .val{font-family:var(--font-mono); color:var(--paper); font-size:13px;}
+  #weather.panel{padding:24px 0;}
 
   /* fundraising */
   .fund-card{background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:26px;}
@@ -311,8 +316,10 @@
         <a href="#" class="btn btn-live" id="heroLiveBtn">
           <span class="live-dot"></span> WATCH LIVE
         </a>
-        <span class="hero-cta-text">Occasional live broadcasts from the road — check back during riding hours for the stream to go live.</span>
+        <a href="#" class="btn btn-support" id="heroSupportBtn">BUY ME A WARM MEAL</a>
+        <a href="#" class="btn btn-charity" id="heroCharityBtn">DONATE TO THE CHARITY</a>
       </div>
+      <p class="hero-cta-text" style="margin-top:10px;">Every ride is powered by people offering a meal or a roof along the way — and raising funds for children's charities working with orphaned kids.</p>
 
       <div class="stat-row">
         <div class="stat">
@@ -403,10 +410,12 @@
         <div class="metric-card">
           <div class="metric-head"><h3>Time in heart rate zones</h3></div>
           <canvas id="chartHrZones"></canvas>
+          <p id="chartHrZonesEmpty" style="display:none; color:var(--text-dim); font-size:13px;">No HR zones set up in Strava yet.</p>
         </div>
         <div class="metric-card">
           <div class="metric-head"><h3>Pace per km</h3></div>
           <canvas id="chartSplits"></canvas>
+          <p id="chartSplitsEmpty" style="display:none; color:var(--text-dim); font-size:13px;">No split data for this activity.</p>
         </div>
       </div>
     </section>
@@ -624,6 +633,15 @@
 const LIVESTREAM_URL = '#'; // e.g. 'https://youtube.com/@yourchannel/live'
 document.getElementById('heroLiveBtn').href = LIVESTREAM_URL;
 document.getElementById('livestreamLink').href = LIVESTREAM_URL;
+
+// "Buy me a warm meal" — a small direct-support link (Buy Me a Coffee,
+// Ko-fi, PayPal.me, or similar work well for this).
+const SUPPORT_URL = '#'; // e.g. 'https://www.buymeacoffee.com/yourname'
+document.getElementById('heroSupportBtn').href = SUPPORT_URL;
+
+// Charity donation link — swap in once you've chosen the orphan charity.
+const CHARITY_URL = '#'; // e.g. 'https://www.justgiving.com/campaign/yourcampaign'
+document.getElementById('heroCharityBtn').href = CHARITY_URL;
 
 /* ---------------- latitude ruler ---------------- */
 // Real range for this expedition: Prudhoe Bay ~70.3°N down to Ushuaia ~54.8°S
@@ -994,6 +1012,9 @@ async function selectActivity(id){
   }
 }
 
+let hrZonesChartInstance = null;
+let splitsChartInstance = null;
+
 function renderActivityDetail(detail){
   if(!detail) return;
 
@@ -1027,8 +1048,18 @@ function renderActivityDetail(detail){
   // Heart rate zones — Strava zone colors, cool (recovery) to hot (max effort)
   const zoneColors = ['#7FB8D8', '#8FE3E8', '#F5C86B', '#FF9B4F', '#FF6B35'];
   const zoneLabels = ['Z1 · Recovery', 'Z2 · Endurance', 'Z3 · Tempo', 'Z4 · Threshold', 'Z5 · Max'];
+
+  // Always destroy the previous chart instance before drawing a new one —
+  // Chart.js silently refuses to reuse a canvas that already has a live
+  // chart attached, which was why only the very first activity ever rendered.
+  if(hrZonesChartInstance){ hrZonesChartInstance.destroy(); hrZonesChartInstance = null; }
+  const hrCanvas = document.getElementById('chartHrZones');
+  const hrEmptyMsg = document.getElementById('chartHrZonesEmpty');
+
   if(detail.hr_zones && detail.hr_zones.length > 0){
-    new Chart(document.getElementById('chartHrZones'), {
+    hrCanvas.style.display = 'block';
+    if(hrEmptyMsg) hrEmptyMsg.style.display = 'none';
+    hrZonesChartInstance = new Chart(hrCanvas, {
       type: 'bar',
       data: {
         labels: detail.hr_zones.map((z, i) => zoneLabels[i] || ('Z' + z.zone)),
@@ -1049,13 +1080,19 @@ function renderActivityDetail(detail){
       }
     });
   }else{
-    document.getElementById('chartHrZones').parentElement.innerHTML =
-      '<div class="metric-head"><h3>Time in heart rate zones</h3></div><p style="color:var(--text-dim); font-size:13px;">No HR zones set up in Strava yet.</p>';
+    hrCanvas.style.display = 'none';
+    if(hrEmptyMsg) hrEmptyMsg.style.display = 'block';
   }
 
   // Pace splits per km
+  if(splitsChartInstance){ splitsChartInstance.destroy(); splitsChartInstance = null; }
+  const splitsCanvas = document.getElementById('chartSplits');
+  const splitsEmptyMsg = document.getElementById('chartSplitsEmpty');
+
   if(detail.splits && detail.splits.length > 0){
-    new Chart(document.getElementById('chartSplits'), {
+    splitsCanvas.style.display = 'block';
+    if(splitsEmptyMsg) splitsEmptyMsg.style.display = 'none';
+    splitsChartInstance = new Chart(splitsCanvas, {
       type: 'bar',
       data: {
         labels: detail.splits.map(s => 'Km ' + s.split),
@@ -1081,8 +1118,8 @@ function renderActivityDetail(detail){
       }
     });
   }else{
-    document.getElementById('chartSplits').parentElement.innerHTML =
-      '<div class="metric-head"><h3>Pace per km</h3></div><p style="color:var(--text-dim); font-size:13px;">No split data for this activity.</p>';
+    splitsCanvas.style.display = 'none';
+    if(splitsEmptyMsg) splitsEmptyMsg.style.display = 'block';
   }
 
   chartsGrid.style.display = 'grid';
