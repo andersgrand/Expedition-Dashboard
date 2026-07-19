@@ -48,9 +48,83 @@ exports.handler = async function (event, context) {
     const tokenData = await tokenResponse.json();
     const accessToken = tokenData.access_token;
 
-    // Step 2: fetch recent activities (last 30, most recent first)
+    // Helper: fetch full detail + HR zones for one activity id
+    async function fetchActivityDetail(id) {
+      const [detailRes, zonesRes] = await Promise.all([
+        fetch(`https://www.strava.com/api/v3/activities/${id}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }),
+        fetch(`https://www.strava.com/api/v3/activities/${id}/zones`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }),
+      ]);
+      const detail = detailRes.ok ? await detailRes.json() : null;
+      const zones = zonesRes.ok ? await zonesRes.json() : [];
+      const hrZoneBlock = zones.find((z) => z.type === "heartrate");
+
+      return {
+        id,
+        calories: detail && detail.calories ? Math.round(detail.calories) : null,
+        elev_high_m: detail && detail.elev_high != null ? Math.round(detail.elev_high) : null,
+        elev_low_m: detail && detail.elev_low != null ? Math.round(detail.elev_low) : null,
+        average_cadence: detail && detail.average_cadence ? Math.round(detail.average_cadence) : null,
+        weighted_average_watts: detail && detail.weighted_average_watts ? Math.round(detail.weighted_average_watts) : null,
+        max_watts: detail && detail.max_watts ? Math.round(detail.max_watts) : null,
+        suffer_score: detail && detail.suffer_score ? detail.suffer_score : null,
+        kudos_count: detail && detail.kudos_count != null ? detail.kudos_count : null,
+        achievement_count: detail && detail.achievement_count != null ? detail.achievement_count : null,
+        pr_count: detail && detail.pr_count != null ? detail.pr_count : null,
+        moving_time_min: detail && detail.moving_time != null ? Math.round(detail.moving_time / 60) : null,
+        elapsed_time_min: detail && detail.elapsed_time != null ? Math.round(detail.elapsed_time / 60) : null,
+        average_speed_kmh: detail && detail.average_speed != null ? +(detail.average_speed * 3.6).toFixed(1) : null,
+        max_speed_kmh: detail && detail.max_speed != null ? +(detail.max_speed * 3.6).toFixed(1) : null,
+        average_heartrate: detail && detail.average_heartrate ? Math.round(detail.average_heartrate) : null,
+        max_heartrate: detail && detail.max_heartrate ? Math.round(detail.max_heartrate) : null,
+        device_name: detail && detail.device_name ? detail.device_name : null,
+        description: detail && detail.description ? detail.description : null,
+        polyline: detail && detail.map ? detail.map.polyline || detail.map.summary_polyline : null,
+        start_lat: detail && detail.start_latlng ? detail.start_latlng[0] : null,
+        start_lng: detail && detail.start_latlng ? detail.start_latlng[1] : null,
+        end_lat: detail && detail.end_latlng ? detail.end_latlng[0] : null,
+        end_lng: detail && detail.end_latlng ? detail.end_latlng[1] : null,
+        splits: detail && detail.splits_metric
+          ? detail.splits_metric.map((s) => ({
+              split: s.split,
+              distance_km: +(s.distance / 1000).toFixed(2),
+              moving_time_min: +(s.moving_time / 60).toFixed(2),
+              elevation_diff_m: Math.round(s.elevation_difference || 0),
+              average_heartrate: s.average_heartrate || null,
+              pace_min_per_km: s.moving_time && s.distance ? +((s.moving_time / (s.distance / 1000)) / 60).toFixed(2) : null,
+            }))
+          : [],
+        hr_zones: hrZoneBlock
+          ? hrZoneBlock.distribution_buckets.map((b, i) => ({
+              zone: i + 1,
+              min: b.min,
+              max: b.max,
+              minutes: +(b.time / 60).toFixed(1),
+            }))
+          : [],
+      };
+    }
+
+    // ON-DEMAND MODE: ?id=12345 — fetch detail for a single specific
+    // activity (used when the visitor picks an older activity from the
+    // dropdown that wasn't part of the initial pre-fetched batch).
+    const requestedId = event.queryStringParameters && event.queryStringParameters.id;
+    if (requestedId) {
+      const detail = await fetchActivityDetail(requestedId);
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=600" },
+        body: JSON.stringify({ activityDetail: detail }),
+      };
+    }
+
+    // DEFAULT MODE: fetch a wider activity list (covers a growing ride
+    // history over the expedition), plus full detail for the 5 most recent.
     const activitiesResponse = await fetch(
-      "https://www.strava.com/api/v3/athlete/activities?per_page=30",
+      "https://www.strava.com/api/v3/athlete/activities?per_page=60",
       {
         headers: { Authorization: `Bearer ${accessToken}` },
       }
@@ -84,65 +158,12 @@ exports.handler = async function (event, context) {
       end_lng: a.end_latlng ? a.end_latlng[1] : null,
     }));
 
-    // Step 3: pull a richer detail view + heart rate zones for the 2 most
-    // recent activities only (keeps API usage low — we don't do this for
-    // all 30, just the ones the dashboard highlights).
+    // Pre-fetch full detail + zones for the 5 most recent activities only
+    // (keeps API usage sane — older ones fetch on demand via ?id= above).
     const activityDetails = {};
-    const idsToDetail = trimmed.slice(0, 2).map((a) => a.id);
-
+    const idsToDetail = trimmed.slice(0, 5).map((a) => a.id);
     for (const id of idsToDetail) {
-      const [detailRes, zonesRes] = await Promise.all([
-        fetch(`https://www.strava.com/api/v3/activities/${id}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }),
-        fetch(`https://www.strava.com/api/v3/activities/${id}/zones`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }),
-      ]);
-
-      const detail = detailRes.ok ? await detailRes.json() : null;
-      const zones = zonesRes.ok ? await zonesRes.json() : [];
-      const hrZoneBlock = zones.find((z) => z.type === "heartrate");
-
-      activityDetails[id] = {
-        id,
-        calories: detail && detail.calories ? Math.round(detail.calories) : null,
-        elev_high_m: detail && detail.elev_high != null ? Math.round(detail.elev_high) : null,
-        elev_low_m: detail && detail.elev_low != null ? Math.round(detail.elev_low) : null,
-        average_cadence: detail && detail.average_cadence ? Math.round(detail.average_cadence) : null,
-        weighted_average_watts: detail && detail.weighted_average_watts ? Math.round(detail.weighted_average_watts) : null,
-        max_watts: detail && detail.max_watts ? Math.round(detail.max_watts) : null,
-        suffer_score: detail && detail.suffer_score ? detail.suffer_score : null,
-        kudos_count: detail && detail.kudos_count != null ? detail.kudos_count : null,
-        achievement_count: detail && detail.achievement_count != null ? detail.achievement_count : null,
-        pr_count: detail && detail.pr_count != null ? detail.pr_count : null,
-        moving_time_min: detail && detail.moving_time != null ? Math.round(detail.moving_time / 60) : null,
-        elapsed_time_min: detail && detail.elapsed_time != null ? Math.round(detail.elapsed_time / 60) : null,
-        average_speed_kmh: detail && detail.average_speed != null ? +(detail.average_speed * 3.6).toFixed(1) : null,
-        max_speed_kmh: detail && detail.max_speed != null ? +(detail.max_speed * 3.6).toFixed(1) : null,
-        average_heartrate: detail && detail.average_heartrate ? Math.round(detail.average_heartrate) : null,
-        max_heartrate: detail && detail.max_heartrate ? Math.round(detail.max_heartrate) : null,
-        device_name: detail && detail.device_name ? detail.device_name : null,
-        description: detail && detail.description ? detail.description : null,
-        splits: detail && detail.splits_metric
-          ? detail.splits_metric.map((s) => ({
-              split: s.split,
-              distance_km: +(s.distance / 1000).toFixed(2),
-              moving_time_min: +(s.moving_time / 60).toFixed(2),
-              elevation_diff_m: Math.round(s.elevation_difference || 0),
-              average_heartrate: s.average_heartrate || null,
-              pace_min_per_km: s.moving_time && s.distance ? +((s.moving_time / (s.distance / 1000)) / 60).toFixed(2) : null,
-            }))
-          : [],
-        hr_zones: hrZoneBlock
-          ? hrZoneBlock.distribution_buckets.map((b, i) => ({
-              zone: i + 1,
-              min: b.min,
-              max: b.max,
-              minutes: +(b.time / 60).toFixed(1),
-            }))
-          : [],
-      };
+      activityDetails[id] = await fetchActivityDetail(id);
     }
 
     // Total distance across all fetched activities (used to drive the
