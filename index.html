@@ -134,6 +134,12 @@
   .hero p.sub{color:var(--text-dim); font-size:16px; margin-top:16px; max-width:560px;}
 
   .hero-cta{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:24px; }
+  #routeCurrentPulse{ animation:routePulse 2.2s infinite; transform-origin:center; transform-box:fill-box; }
+  @keyframes routePulse{
+    0%{ transform:scale(1); opacity:0.6; }
+    70%{ transform:scale(2.2); opacity:0; }
+    100%{ transform:scale(2.2); opacity:0; }
+  }
   .btn-live{ display:inline-flex; align-items:center; gap:8px; background:transparent; border:1px solid var(--signal); color:var(--signal); }
   .btn-live:hover{ background:rgba(255,107,53,0.1); text-decoration:none; }
   .live-dot{ width:7px; height:7px; border-radius:50%; background:var(--signal); animation:pulse 2.2s infinite; }
@@ -246,11 +252,6 @@
     .leaflet-control-attribution{ font-size:8px !important; max-width:50vw; }
   }
   .leaflet-container{ background:#171F29 !important; font-family:var(--font-body); }
-  .route-tooltip{
-    background:var(--panel) !important; border:1px solid var(--line) !important; color:var(--paper) !important;
-    font-family:var(--font-mono) !important; font-size:11px !important; box-shadow:none !important;
-  }
-  .route-tooltip::before{ display:none !important; }
 
   /* activity picker: chips for the last 5, dropdown for full history */
   .activity-chip-row{ display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:16px; }
@@ -346,16 +347,53 @@
       </div>
     </header>
 
-    <!-- EXPEDITION ROUTE GRAPHIC (real map) -->
+    <!-- EXPEDITION ROUTE GRAPHIC -->
     <section class="panel" id="route-graphic" style="padding:28px 0;">
       <div class="panel-head">
         <h2>Expedition route</h2>
-        <span class="eyebrow">Prudhoe Bay, AK → Ushuaia, AR · ~23,000 km</span>
+        <span class="eyebrow" id="routeProgressLabel">Prudhoe Bay, AK → Ushuaia, AR · ~23,000 km</span>
       </div>
-      <div class="map-card" style="padding:0; overflow:hidden;">
-        <div id="routeMap" style="width:100%; height:560px; background:#171F29;"></div>
+      <div class="map-card" style="padding:20px 16px 8px;">
+        <svg viewBox="0 0 1000 260" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto; display:block;">
+          <!-- full route, dim, always visible -->
+          <path id="routePathBg"
+            d="M40,60 C90,100 120,160 150,140 C180,120 210,60 230,80 C280,110 330,160 370,180 C400,190 430,150 460,120 C500,150 530,180 560,190 C600,160 620,120 650,100 C690,140 730,180 760,200 C820,190 860,160 900,150 C930,175 945,200 960,220"
+            fill="none" stroke="#26313D" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 9"/>
+          <!-- covered portion, drawn on top, revealed via JS based on real progress -->
+          <path id="routePathProgress"
+            d="M40,60 C90,100 120,160 150,140 C180,120 210,60 230,80 C280,110 330,160 370,180 C400,190 430,150 460,120 C500,150 530,180 560,190 C600,160 620,120 650,100 C690,140 730,180 760,200 C820,190 860,160 900,150 C930,175 945,200 960,220"
+            fill="none" stroke="#FF6B35" stroke-width="3" stroke-linecap="round"/>
+
+          <!-- waypoints -->
+          <g id="routeWaypoints" font-family="IBM Plex Mono, monospace" font-size="10" fill="#8A97A3">
+            <circle cx="40" cy="60" r="4" fill="#EFEAE0"/>
+            <text x="40" y="42">PRUDHOE BAY</text>
+
+            <circle cx="230" cy="80" r="3" fill="#EFEAE0" opacity="0.7"/>
+            <text x="230" y="62" text-anchor="middle">VANCOUVER</text>
+
+            <circle cx="370" cy="180" r="3" fill="#EFEAE0" opacity="0.7"/>
+            <text x="370" y="205" text-anchor="middle">MEXICO CITY</text>
+
+            <circle cx="460" cy="120" r="3" fill="#EFEAE0" opacity="0.7"/>
+            <text x="460" y="102" text-anchor="middle">DARIÉN GAP (KAYAK)</text>
+
+            <circle cx="650" cy="100" r="3" fill="#EFEAE0" opacity="0.7"/>
+            <text x="650" y="82" text-anchor="middle">LIMA</text>
+
+            <circle cx="760" cy="200" r="3" fill="#EFEAE0" opacity="0.7"/>
+            <text x="760" y="225" text-anchor="middle">SANTIAGO</text>
+
+            <circle cx="960" cy="220" r="4" fill="#EFEAE0"/>
+            <text x="960" y="242" text-anchor="end">USHUAIA</text>
+          </g>
+
+          <!-- current position, moved along the path via JS -->
+          <circle id="routeCurrentMarker" cx="40" cy="60" r="7" fill="#FF6B35"/>
+          <circle id="routeCurrentPulse" cx="40" cy="60" r="7" fill="none" stroke="#FF6B35" stroke-width="1.5" opacity="0.5"/>
+        </svg>
       </div>
-      <p style="text-align:center; color:var(--text-dim); font-size:13px; margin-top:10px;" id="routeProgressText">Calculating progress…</p>
+      <p style="text-align:center; color:var(--text-dim); font-size:13px; margin-top:4px;" id="routeProgressText">Calculating progress…</p>
     </section>
 
     <!-- WEATHER -->
@@ -866,130 +904,35 @@ async function loadLocationDescription(lat, lon){
   }
 }
 
-/* ---------------- expedition route graphic (real map) ---------------- */
-// Real approximate waypoints along the Prudhoe Bay -> Ushuaia route.
-// These are straight-line-ish waypoints (not a precise road-following
-// path), which is a reasonable approximation for a whole-continent
-// overview map — the per-activity map elsewhere shows exact GPS routes.
-const ROUTE_WAYPOINTS = [
-  { name: 'Prudhoe Bay, AK',    lat: 70.2551, lng: -148.3181 },
-  { name: 'Fairbanks, AK',      lat: 64.8378, lng: -147.7164 },
-  { name: 'Whitehorse, YT',     lat: 60.7212, lng: -135.0568 },
-  { name: 'Vancouver, BC',      lat: 49.2827, lng: -123.1207 },
-  { name: 'San Francisco, CA',  lat: 37.7749, lng: -122.4194 },
-  { name: 'Los Angeles, CA',    lat: 34.0522, lng: -118.2437 },
-  { name: 'Mexico City, MX',    lat: 19.4326, lng: -99.1332 },
-  { name: 'Panama City, PA',    lat: 8.9824,  lng: -79.5199 },
-  { name: 'Darién Gap (kayak)', lat: 7.5,     lng: -77.3 },
-  { name: 'Bogotá, CO',         lat: 4.7110,  lng: -74.0721 },
-  { name: 'Quito, EC',          lat: -0.1807, lng: -78.4678 },
-  { name: 'Lima, PE',           lat: -12.0464,lng: -77.0428 },
-  { name: 'Santiago, CL',       lat: -33.4489,lng: -70.6693 },
-  { name: 'Bariloche, AR',      lat: -41.1335,lng: -71.3103 },
-  { name: 'Ushuaia, AR',        lat: -54.8019,lng: -68.3030 },
-];
-
-function haversineKm(lat1, lng1, lat2, lng2){
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-// Precompute cumulative distance at each waypoint along the route
-const ROUTE_CUMULATIVE_KM = [0];
-for(let i = 1; i < ROUTE_WAYPOINTS.length; i++){
-  const prev = ROUTE_WAYPOINTS[i-1], curr = ROUTE_WAYPOINTS[i];
-  ROUTE_CUMULATIVE_KM.push(ROUTE_CUMULATIVE_KM[i-1] + haversineKm(prev.lat, prev.lng, curr.lat, curr.lng));
-}
-const ROUTE_TOTAL_KM = ROUTE_CUMULATIVE_KM[ROUTE_CUMULATIVE_KM.length - 1];
-
-let routeMapInstance = null;
-
-function initRouteMap(){
-  routeMapInstance = L.map('routeMap', { zoomControl: true, attributionControl: true, scrollWheelZoom: false });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    maxZoom: 18,
-    attribution: '&copy; OSM &copy; CARTO'
-  }).addTo(routeMapInstance);
-  routeMapInstance.attributionControl.setPrefix(false);
-
-  const latlngs = ROUTE_WAYPOINTS.map(w => [w.lat, w.lng]);
-
-  // dim full route, always visible underneath
-  L.polyline(latlngs, { color: '#26313D', weight: 3, opacity: 0.9, dashArray: '1 8' }).addTo(routeMapInstance);
-
-  // waypoint markers + labels
-  ROUTE_WAYPOINTS.forEach((wp, i) => {
-    const isEndpoint = i === 0 || i === ROUTE_WAYPOINTS.length - 1;
-    L.circleMarker([wp.lat, wp.lng], {
-      radius: isEndpoint ? 5 : 3,
-      color: '#0A0E12', weight: 1,
-      fillColor: '#EFEAE0', fillOpacity: isEndpoint ? 1 : 0.7
-    }).addTo(routeMapInstance).bindTooltip(wp.name, { direction: 'top', className: 'route-tooltip' });
-  });
-
-  routeMapInstance.fitBounds(L.latLngBounds(latlngs), { padding: [24, 24] });
-}
-
-let coveredRouteLine = null;
-let currentPositionMarker = null;
-
+/* ---------------- expedition route graphic (hero progress ribbon) ---------------- */
 function updateRouteProgress(coveredKm, targetKm){
-  if(!routeMapInstance) return;
-
+  const bgPath = document.getElementById('routePathBg');
+  const progressPath = document.getElementById('routePathProgress');
+  const marker = document.getElementById('routeCurrentMarker');
+  const pulse = document.getElementById('routeCurrentPulse');
   const label = document.getElementById('routeProgressText');
-  // Progress is driven by real km covered, but capped to the route's own
-  // real length so it never overshoots the map even if the fixed 23,000km
-  // target and the actual waypoint-measured distance differ slightly.
-  const progressKm = Math.max(0, Math.min(coveredKm, ROUTE_TOTAL_KM));
+  if(!bgPath || !progressPath) return;
 
-  // Find which segment the progress point falls in, and interpolate
-  let segmentIndex = 0;
-  for(let i = 1; i < ROUTE_CUMULATIVE_KM.length; i++){
-    if(ROUTE_CUMULATIVE_KM[i] >= progressKm){ segmentIndex = i - 1; break; }
-    segmentIndex = i - 1;
-  }
-  const segStart = ROUTE_WAYPOINTS[segmentIndex];
-  const segEnd = ROUTE_WAYPOINTS[Math.min(segmentIndex + 1, ROUTE_WAYPOINTS.length - 1)];
-  const segStartKm = ROUTE_CUMULATIVE_KM[segmentIndex];
-  const segEndKm = ROUTE_CUMULATIVE_KM[Math.min(segmentIndex + 1, ROUTE_CUMULATIVE_KM.length - 1)];
-  const segFraction = segEndKm > segStartKm ? (progressKm - segStartKm) / (segEndKm - segStartKm) : 0;
+  const percent = Math.max(0, Math.min(1, coveredKm / targetKm));
+  const totalLength = bgPath.getTotalLength();
 
-  const currentLat = segStart.lat + (segEnd.lat - segStart.lat) * segFraction;
-  const currentLng = segStart.lng + (segEnd.lng - segStart.lng) * segFraction;
+  // Reveal only the covered portion of the bright path using a dash trick:
+  // dasharray = full length, dashoffset = how much to hide from the start.
+  progressPath.style.strokeDasharray = totalLength;
+  progressPath.style.strokeDashoffset = totalLength * (1 - percent);
 
-  // Build the "covered" polyline: all waypoints up through the current
-  // segment, plus the exact interpolated current point
-  const coveredLatLngs = ROUTE_WAYPOINTS.slice(0, segmentIndex + 1).map(w => [w.lat, w.lng]);
-  coveredLatLngs.push([currentLat, currentLng]);
+  // Move the current-position marker to the exact point along the curve
+  const point = bgPath.getPointAtLength(totalLength * percent);
+  if(marker){ marker.setAttribute('cx', point.x); marker.setAttribute('cy', point.y); }
+  if(pulse){ pulse.setAttribute('cx', point.x); pulse.setAttribute('cy', point.y); }
 
-  if(coveredRouteLine) routeMapInstance.removeLayer(coveredRouteLine);
-  coveredRouteLine = L.polyline(coveredLatLngs, { color: '#FF6B35', weight: 3.5, opacity: 0.95 }).addTo(routeMapInstance);
-
-  if(currentPositionMarker) routeMapInstance.removeLayer(currentPositionMarker);
-  const pulseIcon = L.divIcon({
-    className: '',
-    html: '<div style="width:14px;height:14px;border-radius:50%;background:#FF6B35;box-shadow:0 0 0 6px rgba(255,107,53,0.3); border:2px solid #0A0E12;"></div>',
-    iconSize: [14, 14]
-  });
-  currentPositionMarker = L.marker([currentLat, currentLng], { icon: pulseIcon })
-    .addTo(routeMapInstance)
-    .bindTooltip('Current position (approx.)', { direction: 'top' });
-
-  const percent = ROUTE_TOTAL_KM > 0 ? (progressKm / ROUTE_TOTAL_KM) * 100 : 0;
   if(label){
-    label.textContent = `${percent.toFixed(1)}% of the route covered so far — ${Math.round(coveredKm).toLocaleString()} km of ~${Math.round(targetKm).toLocaleString()} km target`;
+    label.textContent = `${Math.round(percent * 100)}% of the route covered so far — ${Math.round(coveredKm).toLocaleString()} km of ~${targetKm.toLocaleString()} km`;
   }
 }
-
-try{
-  initRouteMap();
-  updateRouteProgress(0, 23000); // draw at 0% immediately, before Strava data loads
-}catch(err){
-  console.log('Route map failed to initialize:', err.message);
-}
+// Draw at 0% immediately so the graphic isn't blank before Strava data loads
+document.addEventListener('DOMContentLoaded', () => updateRouteProgress(0, 23000));
+if(document.readyState !== 'loading') updateRouteProgress(0, 23000);
 
 
 /* ---------------- live map (Leaflet + Strava GPS) ---------------- */
