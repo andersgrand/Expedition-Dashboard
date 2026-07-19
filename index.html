@@ -220,6 +220,37 @@
   .detail-charts-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;}
   @media (max-width:700px){ .detail-charts-grid{grid-template-columns:1fr;} }
 
+  /* leaflet map: shrink the attribution banner so it doesn't dominate on mobile */
+  .leaflet-control-attribution{
+    font-size:9px !important;
+    background:rgba(10,14,18,0.7) !important;
+    color:var(--text-dim) !important;
+    padding:1px 4px !important;
+    line-height:1.3 !important;
+    max-width:60vw;
+  }
+  .leaflet-control-attribution a{ color:var(--text-dim) !important; }
+  @media (max-width:600px){
+    .leaflet-control-attribution{ font-size:8px !important; max-width:50vw; }
+  }
+  .leaflet-container{ background:#171F29 !important; font-family:var(--font-body); }
+
+  /* activity picker: chips for the last 5, dropdown for full history */
+  .activity-chip-row{ display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:16px; }
+  .activity-chip{
+    flex:0 0 auto; font-family:var(--font-mono); font-size:12px; color:var(--text-dim);
+    background:var(--panel); border:1px solid var(--line); border-radius:999px;
+    padding:8px 14px; cursor:pointer; white-space:nowrap; transition:all .15s ease;
+  }
+  .activity-chip:hover{ border-color:var(--ice); color:var(--ice); }
+  .activity-chip.selected{ background:rgba(255,107,53,0.12); border-color:var(--signal); color:var(--signal); }
+  .activity-picker-row{ display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
+  .activity-history-select{
+    font-family:var(--font-mono); font-size:12px; color:var(--text);
+    background:var(--panel); border:1px solid var(--line); border-radius:4px;
+    padding:8px 10px; max-width:100%;
+  }
+
   /* activity feed */
   .activity-feed{display:flex; flex-direction:column;}
   .activity-row{
@@ -296,13 +327,20 @@
         <span class="eyebrow">Live from Strava</span>
       </div>
 
-      <div class="map-card" style="padding:0; overflow:hidden; margin-bottom:20px;">
+      <div class="map-card" style="padding:0; overflow:hidden; margin-bottom:16px;">
         <div id="leafletMap" style="width:100%; height:420px; background:#171F29;"></div>
       </div>
 
-      <div id="activityFeed" class="activity-feed">
-        <p style="color:var(--text-dim); font-size:14px;">Loading recent activities…</p>
+      <div class="activity-picker-row">
+        <div id="activityChips" class="activity-chip-row">
+          <p style="color:var(--text-dim); font-size:14px;">Loading recent activities…</p>
+        </div>
+        <select id="activityHistorySelect" class="activity-history-select">
+          <option value="">Browse full history…</option>
+        </select>
       </div>
+
+      <div id="activitySummary" style="margin-bottom:8px;"></div>
 
       <!-- expanded stat grid -->
       <div class="detail-stat-grid" id="detailStatGrid" style="display:none;">
@@ -650,8 +688,9 @@ function initMap(){
   leafletMap = L.map('leafletMap', { zoomControl: true, attributionControl: true }).setView([20, 0], 2);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     maxZoom: 18,
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+    attribution: '&copy; OSM &copy; CARTO'
   }).addTo(leafletMap);
+  leafletMap.attributionControl.setPrefix(false);
 }
 
 function plotActivityOnMap(activity){
@@ -767,6 +806,7 @@ let distChart = makeBarChart('chartDist', days14, dist, '#FF6B35');
 
 let allActivitiesGlobal = [];
 let activityDetailsGlobal = {};
+let selectedActivityId = null;
 
 function formatDuration(min){
   const h = Math.floor(min / 60);
@@ -774,58 +814,110 @@ function formatDuration(min){
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-function renderActivityFeed(activities){
-  const feed = document.getElementById('activityFeed');
-  if(!feed) return;
+function renderActivityChips(activities){
+  const chipRow = document.getElementById('activityChips');
+  if(!chipRow) return;
   if(activities.length === 0){
-    feed.innerHTML = '<p style="color:var(--text-dim); font-size:14px;">No activities yet.</p>';
+    chipRow.innerHTML = '<p style="color:var(--text-dim); font-size:14px;">No activities yet.</p>';
     return;
   }
-  feed.innerHTML = activities.map((a, i) => {
-    const date = new Date(a.date).toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
-    const hr = a.average_heartrate ? `<span>${Math.round(a.average_heartrate)}<small>bpm avg</small></span>` : '';
-    return `
-      <div class="activity-row" data-activity-id="${a.id}" style="cursor:pointer;" ${i === 0 ? 'data-selected="true"' : ''}>
-        <div>
-          <div class="a-name">${a.name}</div>
-          <div class="a-date">${date}</div>
-        </div>
-        <div class="a-stats">
-          <span>${a.distance_km}<small>km</small></span>
-          <span>${formatDuration(a.moving_time_min)}</span>
-          <span>${a.elevation_gain_m}<small>m gain</small></span>
-          ${hr}
-        </div>
-      </div>`;
+  chipRow.innerHTML = activities.map(a => {
+    const date = new Date(a.date).toLocaleDateString('en-US', { month:'short', day:'numeric' });
+    return `<div class="activity-chip" data-activity-id="${a.id}">${date}</div>`;
   }).join('');
-
-  // wire up click-to-select
-  feed.querySelectorAll('.activity-row').forEach(row => {
-    row.addEventListener('click', () => selectActivity(row.dataset.activityId));
-  });
-  updateFeedHighlight();
-}
-
-function updateFeedHighlight(){
-  document.querySelectorAll('#activityFeed .activity-row').forEach(row => {
-    const isSelected = row.dataset.selected === 'true';
-    row.style.background = isSelected ? 'rgba(143,227,232,0.06)' : 'transparent';
-    row.style.borderLeft = isSelected ? '2px solid var(--ice)' : '2px solid transparent';
-    row.style.paddingLeft = isSelected ? '10px' : '12px';
+  chipRow.querySelectorAll('.activity-chip').forEach(chip => {
+    chip.addEventListener('click', () => selectActivity(chip.dataset.activityId));
   });
 }
 
-function selectActivity(id){
-  const activity = allActivitiesGlobal.find(a => String(a.id) === String(id));
-  if(!activity) return;
-
-  document.querySelectorAll('#activityFeed .activity-row').forEach(row => {
-    row.dataset.selected = String(row.dataset.activityId) === String(id);
+function populateHistoryDropdown(activities){
+  const select = document.getElementById('activityHistorySelect');
+  if(!select) return;
+  const options = activities.map(a => {
+    const date = new Date(a.date).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' });
+    const label = `${date} — ${a.name} (${a.distance_km} km)`;
+    return `<option value="${a.id}">${label}</option>`;
+  }).join('');
+  select.innerHTML = '<option value="">Browse full history…</option>' + options;
+  select.addEventListener('change', () => {
+    if(select.value) selectActivity(select.value);
   });
-  updateFeedHighlight();
+}
 
-  plotActivityOnMap(activity);
-  renderActivityDetail(activityDetailsGlobal[id]);
+function updateChipHighlight(){
+  document.querySelectorAll('#activityChips .activity-chip').forEach(chip => {
+    chip.classList.toggle('selected', String(chip.dataset.activityId) === String(selectedActivityId));
+  });
+}
+
+function renderActivitySummary(activity){
+  const el = document.getElementById('activitySummary');
+  if(!el || !activity) return;
+  const date = new Date(activity.date).toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+  const hr = activity.average_heartrate ? `<span>${Math.round(activity.average_heartrate)}<small>bpm avg</small></span>` : '';
+  el.innerHTML = `
+    <div class="activity-row" style="border-top:none; padding-top:4px;">
+      <div>
+        <div class="a-name">${activity.name}</div>
+        <div class="a-date">${date}</div>
+      </div>
+      <div class="a-stats">
+        <span>${activity.distance_km}<small>km</small></span>
+        <span>${formatDuration(activity.moving_time_min)}</span>
+        <span>${activity.elevation_gain_m}<small>m gain</small></span>
+        ${hr}
+      </div>
+    </div>`;
+}
+
+async function selectActivity(id){
+  selectedActivityId = id;
+  updateChipHighlight();
+
+  const summary = allActivitiesGlobal.find(a => String(a.id) === String(id));
+  if(summary) renderActivitySummary(summary);
+
+  // Show a lightweight loading state in the detail area while we fetch
+  const chartsGrid = document.getElementById('detailChartsGrid');
+  const statGrid = document.getElementById('detailStatGrid');
+
+  let detail = activityDetailsGlobal[id];
+  if(!detail){
+    if(statGrid) statGrid.style.display = 'none';
+    if(chartsGrid) chartsGrid.style.display = 'none';
+    const el = document.getElementById('activitySummary');
+    if(el) el.insertAdjacentHTML('beforeend', '<p style="color:var(--text-dim); font-size:13px; margin-top:8px;">Loading full activity detail…</p>');
+
+    try{
+      const res = await fetch('/.netlify/functions/get-strava-data?id=' + encodeURIComponent(id));
+      const data = await res.json();
+      detail = data.activityDetail;
+      if(detail) activityDetailsGlobal[id] = detail;
+    }catch(err){
+      console.log('Could not fetch activity detail:', err.message);
+    }
+  }
+
+  if(detail){
+    // Merge in name/date from the summary for the map popup, plus prefer
+    // the detail's full-resolution polyline over the summary's simplified one
+    const mapData = {
+      ...summary,
+      ...detail,
+      polyline: detail.polyline || (summary ? summary.polyline : null),
+      start_lat: detail.start_lat != null ? detail.start_lat : (summary ? summary.start_lat : null),
+      start_lng: detail.start_lng != null ? detail.start_lng : (summary ? summary.start_lng : null),
+      end_lat: detail.end_lat != null ? detail.end_lat : (summary ? summary.end_lat : null),
+      end_lng: detail.end_lng != null ? detail.end_lng : (summary ? summary.end_lng : null),
+      name: summary ? summary.name : (detail.description || 'Activity'),
+    };
+    try{
+      plotActivityOnMap(mapData);
+    }catch(mapErr){
+      console.log('Could not plot route on map:', mapErr.message);
+    }
+    renderActivityDetail(detail);
+  }
 }
 
 function renderActivityDetail(detail){
@@ -946,34 +1038,27 @@ async function loadStravaData(){
     if(coveredEl) coveredEl.innerHTML = Math.round(covered).toLocaleString() + ' <small>km</small>';
     if(remainingEl) remainingEl.innerHTML = '~' + Math.round(remaining).toLocaleString() + ' <small>km</small>';
 
-    const latestTwo = allActivities.slice(0, 2);
+    const latestFive = allActivities.slice(0, 5);
 
-    // Plot the most recent activity's real GPS route on the map (default view)
-    try{
-      plotActivityOnMap(latestTwo[0]);
-    }catch(mapErr){
-      console.log('Could not plot route on map:', mapErr.message);
-    }
+    // Chips for instant switching between the 5 most recent (pre-fetched detail)
+    renderActivityChips(latestFive);
+    // Dropdown covering the full fetched history (up to 60) — grows over the expedition
+    populateHistoryDropdown(allActivities);
 
-    // Show the 2 most recent activities in the feed (clickable to switch the map/detail above)
-    renderActivityFeed(latestTwo);
-
-    // Render the expanded detail view (zones, splits, stats) for the latest activity
-    if(activityDetailsGlobal[latestTwo[0].id]){
-      renderActivityDetail(activityDetailsGlobal[latestTwo[0].id]);
-    }
+    // Select the most recent activity by default (already pre-fetched, so instant)
+    selectActivity(allActivities[0].id);
 
     // Load weather for the most recent known position (end point of latest activity)
-    const latestActivity = latestTwo[0];
+    const latestActivity = allActivities[0];
     if(latestActivity && latestActivity.end_lat && latestActivity.end_lng){
       loadWeather(latestActivity.end_lat, latestActivity.end_lng);
     }
 
-    // Elevation/distance charts now show just these 2 activities, not a 14-day trend
-    const chartActivities = [...latestTwo].reverse(); // oldest first, left to right
+    // Elevation/distance charts show the 5 most recent activities
+    const chartActivities = [...latestFive].reverse(); // oldest first, left to right
     const labels = chartActivities.map(a => {
       const date = new Date(a.date).toLocaleDateString('en-US', { month:'short', day:'numeric' });
-      return a.name.length > 14 ? a.name.slice(0, 14) + '…' : a.name;
+      return date;
     });
     const elevData = chartActivities.map(a => a.elevation_gain_m);
     const distData = chartActivities.map(a => a.distance_km);
@@ -987,7 +1072,7 @@ async function loadStravaData(){
     distChart.update();
 
     // update the "now" figures in the card headers to the most recent activity
-    const latest = latestTwo[0];
+    const latest = latestFive[0];
     if(latest){
       document.querySelectorAll('#metrics .metric-card')[2].querySelector('.now').textContent = latest.elevation_gain_m + ' m';
       document.querySelectorAll('#metrics .metric-card')[3].querySelector('.now').textContent = latest.distance_km + ' km';
@@ -996,9 +1081,9 @@ async function loadStravaData(){
     // Silently keep showing sample data on the charts — this is expected until the
     // Netlify function is deployed and environment variables are set.
     console.log('Strava data not available yet, showing sample data:', err.message);
-    const feed = document.getElementById('activityFeed');
-    if(feed){
-      feed.innerHTML = '<p style="color:var(--text-dim); font-size:14px;">Activities will appear here once connected.</p>';
+    const chipRow = document.getElementById('activityChips');
+    if(chipRow){
+      chipRow.innerHTML = '<p style="color:var(--text-dim); font-size:14px;">Activities will appear here once connected.</p>';
     }
   }
 }
