@@ -140,6 +140,8 @@
     70%{ transform:scale(2.2); opacity:0; }
     100%{ transform:scale(2.2); opacity:0; }
   }
+  .btn-route{ background:var(--paper); color:var(--bg); border:1px solid var(--paper); font-weight:700; }
+  .btn-route:hover{ background:#ffffff; text-decoration:none; }
   .btn-live{ display:inline-flex; align-items:center; gap:8px; background:transparent; border:1px solid var(--signal); color:var(--signal); }
   .btn-live:hover{ background:rgba(255,107,53,0.1); text-decoration:none; }
   .live-dot{ width:7px; height:7px; border-radius:50%; background:var(--signal); animation:pulse 2.2s infinite; }
@@ -319,6 +321,7 @@
       <p class="sub">One continuous human-powered line from the Arctic Ocean to the Beagle Channel — cycling the Americas end to end, paddling the Darién Gap where the road runs out.</p>
 
       <div class="hero-cta">
+        <a href="#" class="btn btn-route" id="heroRouteBtn" target="_blank" rel="noopener">🗺 THE ROUTE</a>
         <a href="#" class="btn btn-live" id="heroLiveBtn">
           <span class="live-dot"></span> WATCH LIVE
         </a>
@@ -681,6 +684,11 @@
 
 <script>
 /* ---------------- config: update these links in one place ---------------- */
+// Your custom Google My Maps route — get the shareable link via
+// "Share" on your map (myaps.google.com), then Copy Link.
+const GOOGLE_MAP_URL = 'https://www.google.com/maps/d/viewer?mid=1QbywvOuXcTOK4_eZr-WXxJHFyaAer8A';
+document.getElementById('heroRouteBtn').href = GOOGLE_MAP_URL;
+
 // Set your real livestream URL here (YouTube Live, Twitch, etc.) — updates
 // both the hero "WATCH LIVE" button and the card in "Follow along live".
 const LIVESTREAM_URL = '#'; // e.g. 'https://youtube.com/@yourchannel/live'
