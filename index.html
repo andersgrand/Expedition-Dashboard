@@ -142,6 +142,8 @@
   }
   .btn-route{ background:var(--paper); color:var(--bg); border:1px solid var(--paper); font-weight:700; }
   .btn-route:hover{ background:#ffffff; text-decoration:none; }
+  .btn-about{ background:transparent; border:1px solid var(--text-dim); color:var(--text); }
+  .btn-about:hover{ background:rgba(231,236,239,0.06); text-decoration:none; }
   .btn-live{ display:inline-flex; align-items:center; gap:8px; background:transparent; border:1px solid var(--signal); color:var(--signal); }
   .btn-live:hover{ background:rgba(255,107,53,0.1); text-decoration:none; }
   .live-dot{ width:7px; height:7px; border-radius:50%; background:var(--signal); animation:pulse 2.2s infinite; }
@@ -187,6 +189,12 @@
   .metric-card h3{font-size:13px; font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); font-weight:500;}
   .metric-card .now{font-family:var(--font-mono); color:var(--paper); font-size:20px;}
   .metric-card canvas{max-height:140px;}
+
+  /* about */
+  .about-grid{ display:grid; grid-template-columns:220px 1fr; gap:28px; align-items:start; }
+  @media (max-width:600px){ .about-grid{ grid-template-columns:1fr; } .about-photo-wrap{ max-width:260px; margin:0 auto; } }
+  .about-text p{ color:var(--text); font-size:15px; line-height:1.7; margin-bottom:14px; }
+  .about-text p:last-child{ margin-bottom:0; }
 
   /* weather */
   .weather-card{
@@ -321,7 +329,8 @@
       <p class="sub">One continuous human-powered line from the Arctic Ocean to the Beagle Channel — cycling the Americas end to end, paddling the Darién Gap where the road runs out.</p>
 
       <div class="hero-cta">
-        <a href="#" class="btn btn-route" id="heroRouteBtn" target="_blank" rel="noopener">🗺 THE ROUTE</a>
+        <a href="#the-route" class="btn btn-route" id="heroRouteBtn">🗺 THE ROUTE</a>
+        <a href="#about" class="btn btn-about" id="heroAboutBtn">ABOUT ME</a>
         <a href="#" class="btn btn-live" id="heroLiveBtn">
           <span class="live-dot"></span> WATCH LIVE
         </a>
@@ -349,6 +358,36 @@
         </div>
       </div>
     </header>
+
+    <!-- ABOUT ME -->
+    <section class="panel" id="about" style="padding:36px 0;">
+      <div class="panel-head">
+        <h2>About me</h2>
+        <span class="eyebrow">Who's doing this, and why</span>
+      </div>
+      <div class="about-grid">
+        <div class="about-photo-wrap">
+          <img src="images/about-photo.jpg" alt="Anders Grandien"
+               style="width:100%; border-radius:6px; display:block; object-fit:cover; aspect-ratio:4/5;"
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+          <div style="display:none; aspect-ratio:4/5; width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:6px; align-items:center; justify-content:center; color:var(--text-dim); font-family:var(--font-mono); font-size:12px; text-align:center; padding:20px;">
+            No photo uploaded yet —<br>add images/about-photo.jpg
+          </div>
+        </div>
+        <div class="about-text">
+          <!--
+            EDIT THE TEXT BELOW to be your own — this is placeholder
+            copy for you to personalize. Replace with your real bio,
+            your own words on why you're doing this trip, and any
+            background on past expeditions you want to mention.
+          -->
+          <p>My name's Anders Grandien. I'm a Swedish adventurer — cycling, kayaking, climbing, whatever it takes to get from one end of a line on the map to the other under my own power.</p>
+          <p>Before this trip, I cycled and rode horseback from Karesuando, in the far north of Sweden, all the way to Mount Fuji in Japan — including a side climb up Ibn Sina Peak in Kyrgyzstan along the way. That trip raised money for cancer research, in memory of my father.</p>
+          <p>Now I'm cycling — and, where the road runs out at the Darién Gap, kayaking — from Prudhoe Bay, Alaska, at the very top of the Americas, to Ushuaia, Argentina, at the very bottom. One continuous, human-powered line, roughly 23,000 km.</p>
+          <p>This time, I'm doing it for kids who've lost the thing I nearly lost my own dad to — raising funds for an orphan charity along the way, and hoping the people who feed me and put a roof over my head on the road will do the same for someone who needs it more.</p>
+        </div>
+      </div>
+    </section>
 
     <!-- EXPEDITION ROUTE GRAPHIC -->
     <section class="panel" id="route-graphic" style="padding:28px 0;">
@@ -397,6 +436,26 @@
         </svg>
       </div>
       <p style="text-align:center; color:var(--text-dim); font-size:13px; margin-top:4px;" id="routeProgressText">Calculating progress…</p>
+    </section>
+
+    <!-- GOOGLE MY MAPS EMBED — the actual planned route -->
+    <section class="panel" id="the-route" style="padding:28px 0;">
+      <div class="panel-head">
+        <h2>The planned route</h2>
+        <span class="eyebrow">Custom Google My Maps — the actual road-by-road plan</span>
+      </div>
+      <div class="map-card" style="padding:0; overflow:hidden;">
+        <iframe
+          id="googleMapEmbed"
+          src=""
+          style="width:100%; height:560px; border:0; display:block;"
+          loading="lazy"
+          allowfullscreen>
+        </iframe>
+      </div>
+      <p style="margin-top:12px; color:var(--text-dim); font-size:13px;">
+        Prefer the full view? <a id="googleMapFullLink" href="#" target="_blank" rel="noopener">Open in Google Maps →</a>
+      </p>
     </section>
 
     <!-- WEATHER -->
@@ -685,9 +744,22 @@
 <script>
 /* ---------------- config: update these links in one place ---------------- */
 // Your custom Google My Maps route — get the shareable link via
-// "Share" on your map (myaps.google.com), then Copy Link.
+// "Share" on your map (mymaps.google.com), then Copy Link. Only the
+// mid= value matters; paste the full share link below and it'll be
+// parsed automatically for both the button and the embedded map.
 const GOOGLE_MAP_URL = 'https://www.google.com/maps/d/viewer?mid=1QbywvOuXcTOK4_eZr-WXxJHFyaAer8A';
-document.getElementById('heroRouteBtn').href = GOOGLE_MAP_URL;
+document.getElementById('heroRouteBtn').href = '#the-route';
+
+(function setUpGoogleMapEmbed(){
+  const midMatch = GOOGLE_MAP_URL.match(/mid=([^&]+)/);
+  const mid = midMatch ? midMatch[1] : null;
+  const embedEl = document.getElementById('googleMapEmbed');
+  const fullLinkEl = document.getElementById('googleMapFullLink');
+  if(mid){
+    if(embedEl) embedEl.src = `https://www.google.com/maps/d/embed?mid=${mid}`;
+    if(fullLinkEl) fullLinkEl.href = `https://www.google.com/maps/d/viewer?mid=${mid}`;
+  }
+})();
 
 // Set your real livestream URL here (YouTube Live, Twitch, etc.) — updates
 // both the hero "WATCH LIVE" button and the card in "Follow along live".
