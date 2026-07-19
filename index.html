@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script async src="https://www.instagram.com/embed.js"></script>
 <style>
   :root{
     --bg:#0A0E12;
@@ -131,6 +132,12 @@
   .hero h1{font-size:clamp(32px,6vw,64px); line-height:1.02; max-width:880px;}
   .hero h1 span{color:var(--ice);}
   .hero p.sub{color:var(--text-dim); font-size:16px; margin-top:16px; max-width:560px;}
+
+  .hero-cta{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-top:24px; }
+  .btn-live{ display:inline-flex; align-items:center; gap:8px; background:transparent; border:1px solid var(--signal); color:var(--signal); }
+  .btn-live:hover{ background:rgba(255,107,53,0.1); text-decoration:none; }
+  .live-dot{ width:7px; height:7px; border-radius:50%; background:var(--signal); animation:pulse 2.2s infinite; }
+  .hero-cta-text{ color:var(--text-dim); font-size:13px; max-width:420px; }
 
   .stat-row{
     display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
@@ -300,6 +307,13 @@
       <h1>PRUDHOE BAY <span>→</span> USHUAIA<br>ON BIKE &amp; BY KAYAK</h1>
       <p class="sub">One continuous human-powered line from the Arctic Ocean to the Beagle Channel — cycling the Americas end to end, paddling the Darién Gap where the road runs out.</p>
 
+      <div class="hero-cta">
+        <a href="#" class="btn btn-live" id="heroLiveBtn">
+          <span class="live-dot"></span> WATCH LIVE
+        </a>
+        <span class="hero-cta-text">Occasional live broadcasts from the road — check back during riding hours for the stream to go live.</span>
+      </div>
+
       <div class="stat-row">
         <div class="stat">
           <div class="eyebrow">Current position</div>
@@ -403,12 +417,54 @@
       </p>
     </section>
 
+    <!-- LATEST INSTAGRAM POST -->
+    <section class="panel" id="instagram">
+      <div class="panel-head">
+        <h2>Latest from Instagram</h2>
+        <span class="eyebrow">@andersgrandien — updated manually with each new post</span>
+      </div>
+      <div id="instagramEmbedWrap" style="display:flex; justify-content:center;">
+        <!--
+          REPLACE THE blockquote's data-instgrm-permalink BELOW with your
+          latest post/reel URL each time you post something new. Copy the
+          link from the post's "..." menu -> Copy Link, e.g.
+          https://www.instagram.com/p/AbCdEfGhIjK/ or
+          https://www.instagram.com/reel/AbCdEfGhIjK/
+          Nothing else in this block needs to change.
+        -->
+        <blockquote
+          class="instagram-media"
+          data-instgrm-permalink="https://www.instagram.com/andersgrandien/"
+          data-instgrm-version="14"
+          style="background:#121820; border:1px solid #26313D; border-radius:6px; max-width:540px; width:100%; margin:0;">
+        </blockquote>
+      </div>
+      <p style="margin-top:12px; color:var(--text-dim); font-size:13px; text-align:center;">
+        Prefer the feed? <a href="https://www.instagram.com/andersgrandien/" target="_blank" rel="noopener">Open Instagram →</a>
+      </p>
+    </section>
+
     <!-- HEALTH METRICS -->
     <section class="panel" id="metrics">
       <div class="panel-head">
         <h2>Health metrics</h2>
-        <span class="eyebrow">Sample data — connects to COROS via Terra API</span>
+        <span class="eyebrow">Training stats live from Strava · sleep/HRV from COROS</span>
       </div>
+
+      <!-- training statistics, computed across every fetched activity -->
+      <div class="stat-row" id="trainingStatsRow" style="margin-bottom:20px;">
+        <div class="stat"><div class="eyebrow">Activities logged</div><div class="val" id="statCount">—</div></div>
+        <div class="stat"><div class="eyebrow">Total distance</div><div class="val" id="statTotalDist">—</div></div>
+        <div class="stat"><div class="eyebrow">Total elevation</div><div class="val" id="statTotalElev">—</div></div>
+        <div class="stat"><div class="eyebrow">Total time moving</div><div class="val" id="statTotalTime">—</div></div>
+      </div>
+      <div class="stat-row" id="trainingStatsRow2" style="margin-bottom:20px;">
+        <div class="stat"><div class="eyebrow">Avg distance / ride</div><div class="val" id="statAvgDist">—</div></div>
+        <div class="stat"><div class="eyebrow">Avg heart rate</div><div class="val" id="statAvgHrAll">—</div></div>
+        <div class="stat"><div class="eyebrow">Longest ride</div><div class="val" id="statLongest">—</div></div>
+        <div class="stat"><div class="eyebrow">Biggest climb day</div><div class="val" id="statBiggestClimb">—</div></div>
+      </div>
+
       <div class="metrics-grid">
         <div class="metric-card">
           <div class="metric-head"><h3>Resting heart rate — 30 days</h3><span class="now">48 bpm</span></div>
@@ -419,11 +475,11 @@
           <canvas id="chartSleep"></canvas>
         </div>
         <div class="metric-card">
-          <div class="metric-head"><h3>Daily elevation gain — 14 days</h3><span class="now">890 m</span></div>
+          <div class="metric-head"><h3>Elevation gain — last 5 rides</h3><span class="now">890 m</span></div>
           <canvas id="chartElev"></canvas>
         </div>
         <div class="metric-card">
-          <div class="metric-head"><h3>Daily distance — 14 days</h3><span class="now">112 km</span></div>
+          <div class="metric-head"><h3>Distance — last 5 rides</h3><span class="now">112 km</span></div>
           <canvas id="chartDist"></canvas>
         </div>
       </div>
@@ -506,7 +562,7 @@
     <section class="panel" id="follow">
       <div class="panel-head"><h2>Follow along live</h2></div>
       <div class="links-grid">
-        <a class="link-card" href="#">
+        <a class="link-card" href="#" id="livestreamLink">
           <span class="eyebrow">LIVESTREAM</span>
           <h3>Watch live on the road</h3>
           <p>Occasional live broadcasts from the bike and campsite.</p>
@@ -551,6 +607,13 @@
 </div>
 
 <script>
+/* ---------------- config: update these links in one place ---------------- */
+// Set your real livestream URL here (YouTube Live, Twitch, etc.) — updates
+// both the hero "WATCH LIVE" button and the card in "Follow along live".
+const LIVESTREAM_URL = '#'; // e.g. 'https://youtube.com/@yourchannel/live'
+document.getElementById('heroLiveBtn').href = LIVESTREAM_URL;
+document.getElementById('livestreamLink').href = LIVESTREAM_URL;
+
 /* ---------------- latitude ruler ---------------- */
 // Real range for this expedition: Prudhoe Bay ~70.3°N down to Ushuaia ~54.8°S
 const LAT_TOP = 70.3;
@@ -1014,6 +1077,29 @@ function renderActivityDetail(detail){
   chartsGrid.style.display = 'grid';
 }
 
+function renderTrainingStats(activities){
+  if(!activities || activities.length === 0) return;
+
+  const totalDist = activities.reduce((s, a) => s + (a.distance_km || 0), 0);
+  const totalElev = activities.reduce((s, a) => s + (a.elevation_gain_m || 0), 0);
+  const totalTimeMin = activities.reduce((s, a) => s + (a.moving_time_min || 0), 0);
+  const withHr = activities.filter(a => a.average_heartrate);
+  const avgHr = withHr.length > 0 ? withHr.reduce((s, a) => s + a.average_heartrate, 0) / withHr.length : null;
+  const longest = activities.reduce((max, a) => (a.distance_km > (max ? max.distance_km : 0) ? a : max), null);
+  const biggestClimb = activities.reduce((max, a) => (a.elevation_gain_m > (max ? max.elevation_gain_m : 0) ? a : max), null);
+
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+
+  set('statCount', activities.length);
+  set('statTotalDist', Math.round(totalDist).toLocaleString() + ' km');
+  set('statTotalElev', Math.round(totalElev).toLocaleString() + ' m');
+  set('statTotalTime', formatDuration(totalTimeMin));
+  set('statAvgDist', (totalDist / activities.length).toFixed(1) + ' km');
+  set('statAvgHrAll', avgHr ? Math.round(avgHr) + ' bpm' : '—');
+  set('statLongest', longest ? `${longest.distance_km} km` : '—');
+  set('statBiggestClimb', biggestClimb ? `${biggestClimb.elevation_gain_m} m` : '—');
+}
+
 async function loadStravaData(){
   try{
     const res = await fetch('/.netlify/functions/get-strava-data');
@@ -1024,6 +1110,9 @@ async function loadStravaData(){
 
     allActivitiesGlobal = allActivities;
     activityDetailsGlobal = data.activityDetails || {};
+
+    // Aggregate training statistics across every fetched activity
+    renderTrainingStats(allActivities);
 
     // Hero stats: distance covered = sum of fetched Strava activities,
     // remaining = fixed expedition target minus that.
